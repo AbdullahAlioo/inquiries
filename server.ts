@@ -23,13 +23,21 @@ app.use(express.urlencoded({ extended: true }));
 export interface Inquiry {
   id: string;
   ticket_number: string;
-  name: string;
-  email: string;
+  // 8 Core Daycare Inquiry Fields
+  parent_name: string;
   phone?: string;
-  country: string; // Enquiry Type e.g. "Infant Care", "Toddler Program", "Tour Request"
+  child_name?: string;
+  child_age?: string;
+  email: string;
+  preferred_program?: string;
+  preferred_start_date?: string;
+  message?: string;
+
+  // Backwards compatibility & admin extras
+  name: string;
+  country: string; // Enquiry Type / Preferred Program
   region?: string;  // Notes / message preview
   interest?: string;
-  message?: string;
   source: string;
   status: 'Pending' | 'Contacted' | 'In Review' | 'Converted' | 'Archived';
   dealt: boolean; // Tick option: true when parent enquiry has been dealt with
@@ -137,7 +145,15 @@ function broadcastSse(event: string, data: any) {
 }
 
 function extractInquiryPayload(sourceData: Record<string, any>, req: Request) {
-  const name = String(
+  // 1. Parent or guardian name
+  const parent_name = String(
+    sourceData.parent_name ||
+    sourceData.parentName ||
+    sourceData['parent-name'] ||
+    sourceData.parent_or_guardian_name ||
+    sourceData['parent_or_guardian_name'] ||
+    sourceData.guardian_name ||
+    sourceData.guardianName ||
     sourceData.name ||
     sourceData['modal-name'] ||
     sourceData.fullName ||
@@ -145,34 +161,88 @@ function extractInquiryPayload(sourceData: Record<string, any>, req: Request) {
     ''
   ).trim();
 
+  // 2. Phone number
+  const phone = String(
+    sourceData.phone ||
+    sourceData.phone_number ||
+    sourceData.phoneNumber ||
+    sourceData['modal-phone'] ||
+    sourceData.tel ||
+    sourceData.mobile ||
+    ''
+  ).trim();
+
+  // 3. Child's name
+  const child_name = String(
+    sourceData.child_name ||
+    sourceData.childName ||
+    sourceData['child_name'] ||
+    sourceData["child's_name"] ||
+    sourceData['childs_name'] ||
+    sourceData.child ||
+    sourceData['modal-child'] ||
+    sourceData.student_name ||
+    sourceData.studentName ||
+    ''
+  ).trim();
+
+  // 4. Child's age
+  const child_age = String(
+    sourceData.child_age ||
+    sourceData.childAge ||
+    sourceData["child's_age"] ||
+    sourceData['childs_age'] ||
+    sourceData.age ||
+    sourceData['modal-age'] ||
+    sourceData.child_dob ||
+    sourceData.dob ||
+    ''
+  ).trim();
+
+  // 5. Email address
   const email = String(
     sourceData.email ||
+    sourceData.email_address ||
+    sourceData.emailAddress ||
     sourceData['modal-email'] ||
     ''
   ).trim();
 
-  const phone = String(
-    sourceData.phone ||
-    sourceData['modal-phone'] ||
-    sourceData.tel ||
-    ''
-  ).trim();
-
-  const interest = String(
-    sourceData.country ||
+  // 6. Preferred program
+  const preferred_program = String(
+    sourceData.preferred_program ||
+    sourceData.preferredProgram ||
+    sourceData['preferred-program'] ||
+    sourceData.program ||
     sourceData.interest ||
     sourceData['modal-interest'] ||
+    sourceData.country ||
     sourceData.enquiryType ||
     sourceData.enquiry_type ||
     sourceData.subject ||
-    'General Enquiry'
+    'Toddler Program'
   ).trim();
 
+  // 7. Preferred start date
+  const preferred_start_date = String(
+    sourceData.preferred_start_date ||
+    sourceData.preferredStartDate ||
+    sourceData['preferred-start-date'] ||
+    sourceData.start_date ||
+    sourceData.startDate ||
+    sourceData['start-date'] ||
+    sourceData.date ||
+    sourceData['modal-start-date'] ||
+    ''
+  ).trim();
+
+  // 8. Message
   const message = String(
     sourceData.message ||
     sourceData['modal-message'] ||
     sourceData.region ||
     sourceData.comments ||
+    sourceData.notes ||
     sourceData.body ||
     ''
   ).trim();
@@ -180,15 +250,18 @@ function extractInquiryPayload(sourceData: Record<string, any>, req: Request) {
   const source = String(
     sourceData.source ||
     sourceData['modal-source'] ||
-    'website-form'
+    'daycare-website-form'
   ).trim();
 
   const standardKeys = new Set([
-    'name', 'modal-name', 'fullName', 'fullname',
-    'email', 'modal-email',
-    'phone', 'modal-phone', 'tel',
-    'country', 'interest', 'modal-interest', 'enquiryType', 'enquiry_type', 'subject',
-    'message', 'modal-message', 'region', 'comments', 'body',
+    'name', 'modal-name', 'fullName', 'fullname', 'parent_name', 'parentName', 'parent-name', 'parent_or_guardian_name', 'guardian_name',
+    'phone', 'phone_number', 'phoneNumber', 'modal-phone', 'tel', 'mobile',
+    'child_name', 'childName', "child's_name", 'childs_name', 'child', 'modal-child', 'student_name',
+    'child_age', 'childAge', "child's_age", 'childs_age', 'age', 'modal-age', 'child_dob', 'dob',
+    'email', 'email_address', 'emailAddress', 'modal-email',
+    'preferred_program', 'preferredProgram', 'preferred-program', 'program', 'country', 'interest', 'modal-interest', 'enquiryType', 'enquiry_type', 'subject',
+    'preferred_start_date', 'preferredStartDate', 'preferred-start-date', 'start_date', 'startDate', 'start-date', 'date', 'modal-start-date',
+    'message', 'modal-message', 'region', 'comments', 'notes', 'body',
     'source', 'modal-source', 'ticket_number', 'dealt'
   ]);
 
@@ -199,17 +272,39 @@ function extractInquiryPayload(sourceData: Record<string, any>, req: Request) {
     }
   }
 
-  return { name, email, phone, interest, message, source, metadata };
+  return {
+    parent_name,
+    phone,
+    child_name,
+    child_age,
+    email,
+    preferred_program,
+    preferred_start_date,
+    message,
+    source,
+    metadata
+  };
 }
 
 // -------------------------------------------------------------
 // CORE INQUIRY INGESTION ENDPOINTS (Matches User's Website Script)
-// Exactly accepts GET /inquiry?name=...&email=...
+// Accepts GET /inquiry?parent_name=...&phone=...&child_name=...
 // Also accepts POST /inquiry with JSON or URL-encoded form body
 // -------------------------------------------------------------
 function handleInquiryIngestion(req: Request, res: Response) {
   const payloadSource = req.method === 'GET' ? req.query : { ...req.query, ...req.body };
-  const { name, email, phone, interest, message, source, metadata } = extractInquiryPayload(payloadSource, req);
+  const {
+    parent_name,
+    phone,
+    child_name,
+    child_age,
+    email,
+    preferred_program,
+    preferred_start_date,
+    message,
+    source,
+    metadata
+  } = extractInquiryPayload(payloadSource, req);
 
   if (!email) {
     return res.status(400).json({
@@ -226,22 +321,32 @@ function handleInquiryIngestion(req: Request, res: Response) {
   const now = new Date();
   const timestamp = now.toISOString().slice(0, 19).replace('T', ' ');
 
+  const displayName = parent_name || 'Parent / Guardian';
+
   const newInquiry: Inquiry = {
     id: `inq_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
     ticket_number: ticketNumber,
-    name: name || 'Parent Visitor',
-    email,
+    // The 8 Core Daycare Fields
+    parent_name: displayName,
     phone: phone || undefined,
-    country: interest || 'General Enquiry',
-    region: message || undefined,
-    interest: interest || 'General Enquiry',
+    child_name: child_name || undefined,
+    child_age: child_age || undefined,
+    email,
+    preferred_program: preferred_program || 'Toddler Program',
+    preferred_start_date: preferred_start_date || undefined,
     message: message || undefined,
+
+    // Backward compatibility aliases
+    name: displayName,
+    country: preferred_program || 'Toddler Program',
+    region: message || undefined,
+    interest: preferred_program || 'Toddler Program',
     source: source || 'website-form',
     status: 'Pending',
     dealt: false, // Starts unticked (pending)
     starred: false,
     notes: '',
-    tags: [interest || 'Enquiry'],
+    tags: [preferred_program || 'Daycare Enquiry'],
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),
     timestamp,
@@ -257,9 +362,9 @@ function handleInquiryIngestion(req: Request, res: Response) {
 
   return res.status(200).json({
     success: true,
-    message: 'Inquiry received successfully. Our team will contact you shortly.',
+    message: 'Inquiry received successfully. Our daycare team will contact you shortly.',
+    ticket_number: ticketNumber,
     id: newInquiry.id,
-    ticket_number: newInquiry.ticket_number,
     inquiry: newInquiry
   });
 }
@@ -444,22 +549,37 @@ app.post('/delete_waiting_entry/:id', (req: Request, res: Response) => {
 
 // EXPORT EXCEL / CSV
 function handleExport(req: Request, res: Response) {
-  const headers = ['Dealt', 'Name', 'Email', 'Phone', 'Enquiry Type', 'Request ID', 'Status', 'Date', 'Notes'];
+  const headers = [
+    'Status (Dealt)',
+    'Request ID',
+    'Parent or Guardian Name',
+    'Phone Number',
+    'Child Name',
+    'Child Age',
+    'Email Address',
+    'Preferred Program',
+    'Preferred Start Date',
+    'Message',
+    'Date Received'
+  ];
+
   const rows = inquiriesCache.map(i => [
-    i.dealt ? 'YES' : 'NO',
-    `"${(i.name || '').replace(/"/g, '""')}"`,
-    `"${(i.email || '').replace(/"/g, '""')}"`,
-    `"${(i.phone || '').replace(/"/g, '""')}"`,
-    `"${(i.country || '').replace(/"/g, '""')}"`,
+    i.dealt ? 'DEALT / DONE' : 'PENDING',
     i.ticket_number || i.id,
-    i.status,
-    i.timestamp,
-    `"${(i.region || i.message || i.notes || '').replace(/"/g, '""')}"`
+    `"${(i.parent_name || i.name || '').replace(/"/g, '""')}"`,
+    `"${(i.phone || '').replace(/"/g, '""')}"`,
+    `"${(i.child_name || '').replace(/"/g, '""')}"`,
+    `"${(i.child_age || '').replace(/"/g, '""')}"`,
+    `"${(i.email || '').replace(/"/g, '""')}"`,
+    `"${(i.preferred_program || i.country || i.interest || '').replace(/"/g, '""')}"`,
+    `"${(i.preferred_start_date || '').replace(/"/g, '""')}"`,
+    `"${(i.message || i.region || i.notes || '').replace(/"/g, '""')}"`,
+    i.timestamp
   ].join(','));
 
   const csv = [headers.join(','), ...rows].join('\n');
   res.setHeader('Content-Type', 'text/csv');
-  res.setHeader('Content-Disposition', 'attachment; filename="parent_enquiries_export.csv"');
+  res.setHeader('Content-Disposition', 'attachment; filename="daycare_parent_enquiries.csv"');
   res.send(csv);
 }
 

@@ -5,16 +5,25 @@ export type TicketStatus =
 export interface Ticket {
   id: string;
   ticket_number?: string;
-  name: string;
-  email: string;
-  phone?: string;
-  country?: string; // Enquiry Type
-  region?: string;  // Notes / message preview
-  interest?: string;
-  message?: string;
+  
+  // The 8 Core Daycare Inquiry Fields
+  parent_name: string;          // Parent or guardian name
+  phone?: string;               // Phone number
+  child_name?: string;          // Child's name
+  child_age?: string;           // Child's age
+  email: string;                // Email address
+  preferred_program?: string;   // Preferred program
+  preferred_start_date?: string;// Preferred start date
+  message?: string;             // Message
+  
+  // Aliases & Admin fields for backwards compatibility
+  name: string;                 // Same as parent_name
+  country?: string;             // Alias for preferred_program
+  region?: string;              // Alias for message preview
+  interest?: string;            // Alias for preferred_program
   source: string;
   status: TicketStatus;
-  dealt?: boolean; // Ticked when dealt with
+  dealt?: boolean;              // Ticked when dealt with
   starred?: boolean;
   notes?: string;
   tags?: string[];
