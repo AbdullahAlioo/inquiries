@@ -256,6 +256,21 @@ function extractInquiryPayload(sourceData: Record<string, any>) {
 
 function handleInquiryIngestion(req: Request, res: Response) {
   const payloadSource = req.method === 'GET' ? req.query : { ...req.query, ...req.body };
+
+  // Smart-routing: If request has child parameters and no inquiry topic, route to Enrollments!
+  const hasChildInfo = Boolean(
+    payloadSource.child_name || payloadSource.childName || payloadSource['child_name'] || payloadSource.child ||
+    payloadSource.child_age || payloadSource.childAge || payloadSource['child_age'] || payloadSource.age
+  );
+  const hasInquiryTopic = Boolean(
+    payloadSource['What can we help with?'] || payloadSource['what can we help with?'] || 
+    payloadSource.what_can_we_help_with || payloadSource.help_topic
+  );
+
+  if (hasChildInfo && !hasInquiryTopic) {
+    return handleEnrollmentIngestion(req, res);
+  }
+
   const { your_name, phone, email, what_can_we_help_with, your_message, source } = extractInquiryPayload(payloadSource);
 
   if (!email) {
@@ -612,6 +627,46 @@ function handleInquiryDelete(req: Request, res: Response) {
 app.delete('/api/inquiries/:id', handleInquiryDelete);
 app.post('/api/inquiries/:id/delete', handleInquiryDelete);
 
+// Move Inquiry -> Enrollment
+app.post('/api/inquiries/:id/move_to_enrollments', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const searchTarget = decodeURIComponent(String(id)).trim().toLowerCase();
+  const idx = inquiriesCache.findIndex(i => (i.id || '').toLowerCase() === searchTarget || (i.ticket_number || '').toLowerCase() === searchTarget);
+  if (idx === -1) {
+    return res.status(404).json({ success: false, error: 'Inquiry not found' });
+  }
+
+  const [inq] = inquiriesCache.splice(idx, 1);
+  saveInquiries(inquiriesCache);
+  broadcastSse('inquiry_deleted', { id: inq.id, ticket_number: inq.ticket_number });
+
+  const enr: Enrollment = {
+    id: `enr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    enrollment_number: `ENR-${5000 + Math.floor(Math.random() * 9000)}`,
+    parent_name: inq.your_name,
+    name: inq.your_name,
+    phone: inq.phone,
+    email: inq.email,
+    child_name: undefined,
+    child_age: undefined,
+    preferred_program: inq.what_can_we_help_with || 'Toddler Program',
+    preferred_start_date: undefined,
+    message: inq.your_message,
+    source: inq.source || 'moved-from-inquiry',
+    status: inq.dealt ? 'Confirmed' : 'Pending',
+    dealt: inq.dealt,
+    createdAt: inq.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    timestamp: inq.timestamp || new Date().toISOString().slice(0, 19).replace('T', ' ')
+  };
+
+  enrollmentsCache = [enr, ...enrollmentsCache];
+  saveEnrollments(enrollmentsCache);
+  broadcastSse('enrollment_created', enr);
+
+  return res.json({ success: true, message: 'Moved to Enrollments', enrollment: enr });
+});
+
 // -------------------------------------------------------------
 // REST APIS: ENROLLMENTS
 // -------------------------------------------------------------
@@ -704,6 +759,48 @@ function handleEnrollmentDelete(req: Request, res: Response) {
 
 app.delete('/api/enrollments/:id', handleEnrollmentDelete);
 app.post('/api/enrollments/:id/delete', handleEnrollmentDelete);
+
+// Move Enrollment -> Inquiry
+app.post('/api/enrollments/:id/move_to_inquiries', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const searchTarget = decodeURIComponent(String(id)).trim().toLowerCase();
+  const idx = enrollmentsCache.findIndex(e => (e.id || '').toLowerCase() === searchTarget || (e.enrollment_number || '').toLowerCase() === searchTarget);
+  if (idx === -1) {
+    return res.status(404).json({ success: false, error: 'Enrollment not found' });
+  }
+
+  const [enr] = enrollmentsCache.splice(idx, 1);
+  saveEnrollments(enrollmentsCache);
+  broadcastSse('enrollment_deleted', { id: enr.id, enrollment_number: enr.enrollment_number });
+
+  const inq: Inquiry = {
+    id: `inq_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    ticket_number: `INQ-${1000 + Math.floor(Math.random() * 9000)}`,
+    your_name: enr.parent_name,
+    name: enr.parent_name,
+    phone: enr.phone,
+    email: enr.email,
+    what_can_we_help_with: enr.preferred_program || 'General Inquiry',
+    your_message: [
+      enr.child_name ? `Child: ${enr.child_name} (${enr.child_age || 'Age not specified'})` : '',
+      enr.preferred_start_date ? `Start date: ${enr.preferred_start_date}` : '',
+      enr.message || ''
+    ].filter(Boolean).join('\n'),
+    message: enr.message,
+    source: enr.source || 'moved-from-enrollment',
+    status: enr.dealt ? 'Resolved' : 'Pending',
+    dealt: enr.dealt,
+    createdAt: enr.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    timestamp: enr.timestamp || new Date().toISOString().slice(0, 19).replace('T', ' ')
+  };
+
+  inquiriesCache = [inq, ...inquiriesCache];
+  saveInquiries(inquiriesCache);
+  broadcastSse('inquiry_created', inq);
+
+  return res.json({ success: true, message: 'Moved to Inquiries', inquiry: inq });
+});
 
 // Legacy waiting list aliases mapped to enrollments
 app.get('/api/waiting', (req: Request, res: Response) => {

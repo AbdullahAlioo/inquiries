@@ -9,7 +9,6 @@ export default function App() {
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState<string>('');
 
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
@@ -17,10 +16,10 @@ export default function App() {
   const [dealtFilter, setDealtFilter] = useState<'all' | 'pending' | 'dealt'>('all');
 
   // Sorting
-  const [sortCol, setSortCol] = useState<number>(5); // default date received
+  const [sortCol, setSortCol] = useState<number>(5);
   const [sortAsc, setSortAsc] = useState<boolean>(false);
 
-  // Responsive View Mode: Table vs Card View
+  // Responsive View Mode: Table vs Cards
   const [viewMode, setViewMode] = useState<'table' | 'cards'>(() => {
     if (typeof window !== 'undefined' && window.innerWidth < 992) {
       return 'cards';
@@ -28,7 +27,7 @@ export default function App() {
     return 'table';
   });
 
-  // UI Alerts
+  // UI Toast Alert
   const [flashMessage, setFlashMessage] = useState<{ type: 'success' | 'danger' | 'info'; text: string } | null>(null);
 
   // Custom non-blocking confirmation dialog
@@ -54,15 +53,15 @@ export default function App() {
   const [showScriptModal, setShowScriptModal] = useState(false);
   const [scriptModalTab, setScriptModalTab] = useState<'inquiry' | 'enrollment'>('inquiry');
 
-  // Test Inquiry Form state (5 core fields requested by user)
+  // Test Inquiry Form state (5 core fields)
   const [testInqName, setTestInqName] = useState('David Miller');
   const [testInqPhone, setTestInqPhone] = useState('+1 (555) 234-8901');
   const [testInqEmail, setTestInqEmail] = useState('david.miller@example.com');
   const [testInqHelpWith, setTestInqHelpWith] = useState('Schedule a Campus Tour');
-  const [testInqMessage, setTestInqMessage] = useState('We are relocating to the neighborhood and would love to visit the daycare classrooms next Tuesday.');
+  const [testInqMessage, setTestInqMessage] = useState('We are relocating to the area and would like to visit the classrooms next Tuesday.');
   const [testInqSending, setTestInqSending] = useState(false);
 
-  // Test Enrollment Form state (/enroll & /enool)
+  // Test Enrollment Form state
   const [testEnrParent, setTestEnrParent] = useState('Sarah & David Miller');
   const [testEnrPhone, setTestEnrPhone] = useState('+1 (555) 234-8901');
   const [testEnrEmail, setTestEnrEmail] = useState('sarah.miller@example.com');
@@ -70,29 +69,17 @@ export default function App() {
   const [testEnrAge, setTestEnrAge] = useState('2.5 years');
   const [testEnrProgram, setTestEnrProgram] = useState('Toddler Program (Full-Day)');
   const [testEnrDate, setTestEnrDate] = useState('2026-11-01');
-  const [testEnrNotes, setTestEnrNotes] = useState('Looking for full-time enrollment. No dietary restrictions.');
+  const [testEnrNotes, setTestEnrNotes] = useState('Full-time enrollment. No dietary restrictions.');
   const [testEnrEndpoint, setTestEnrEndpoint] = useState<'/enroll' | '/enool'>('/enroll');
   const [testEnrSending, setTestEnrSending] = useState(false);
 
-  // Auto-dismiss flash notifications after 4.5 seconds
+  // Auto-dismiss toast after 4 seconds
   useEffect(() => {
     if (flashMessage) {
-      const timer = setTimeout(() => {
-        setFlashMessage(null);
-      }, 4500);
+      const timer = setTimeout(() => setFlashMessage(null), 4000);
       return () => clearTimeout(timer);
     }
   }, [flashMessage]);
-
-  // Update clock
-  useEffect(() => {
-    const updateTime = () => {
-      setLastUpdated(new Date().toISOString().slice(0, 19).replace('T', ' '));
-    };
-    updateTime();
-    const timer = setInterval(updateTime, 10000);
-    return () => clearInterval(timer);
-  }, []);
 
   // Fetch all data
   const fetchData = async () => {
@@ -111,7 +98,6 @@ export default function App() {
         const dataEnr = await resEnr.json();
         setEnrollments(dataEnr.enrollments || []);
       }
-      setLastUpdated(new Date().toISOString().slice(0, 19).replace('T', ' '));
     } catch (err) {
       console.error('Error fetching data:', err);
     } finally {
@@ -127,7 +113,6 @@ export default function App() {
     try {
       eventSource = new EventSource('/api/inquiries/stream');
 
-      // Inquiry events
       eventSource.addEventListener('inquiry_created', (event) => {
         try {
           const item: Inquiry = JSON.parse(event.data);
@@ -137,7 +122,7 @@ export default function App() {
           });
           setFlashMessage({
             type: 'info',
-            text: `New Inquiry from ${item.your_name} (${item.what_can_we_help_with})`
+            text: `New inquiry from ${item.your_name}`
           });
         } catch (e) {
           console.error(e);
@@ -164,7 +149,6 @@ export default function App() {
         }
       });
 
-      // Enrollment events
       eventSource.addEventListener('enrollment_created', (event) => {
         try {
           const item: Enrollment = JSON.parse(event.data);
@@ -174,7 +158,7 @@ export default function App() {
           });
           setFlashMessage({
             type: 'success',
-            text: `New Enrollment: ${item.parent_name} • Child: ${item.child_name || 'N/A'}`
+            text: `New enrollment for ${item.child_name || item.parent_name}`
           });
         } catch (e) {
           console.error(e);
@@ -233,10 +217,6 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dealt: newDealtStatus })
       });
-      setFlashMessage({
-        type: newDealtStatus ? 'success' : 'info',
-        text: newDealtStatus ? 'Inquiry marked as Dealt ✓' : 'Inquiry marked as Pending'
-      });
     } catch (err) {
       console.error(err);
       fetchData();
@@ -262,13 +242,49 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dealt: newDealtStatus })
       });
-      setFlashMessage({
-        type: newDealtStatus ? 'success' : 'info',
-        text: newDealtStatus ? 'Enrollment confirmed / processed ✓' : 'Enrollment set to Pending'
-      });
     } catch (err) {
       console.error(err);
       fetchData();
+    }
+  };
+
+  // Move Inquiry -> Enrollment
+  const handleMoveInquiryToEnrollment = async (inq: Inquiry) => {
+    try {
+      const res = await fetch(`/api/inquiries/${encodeURIComponent(inq.id || inq.ticket_number)}/move_to_enrollments`, {
+        method: 'POST'
+      });
+      if (res.ok) {
+        setInquiries(prev => prev.filter(i => i.id !== inq.id && i.ticket_number !== inq.ticket_number));
+        setSelectedInquiry(null);
+        setFlashMessage({
+          type: 'success',
+          text: `Moved "${inq.your_name}" to Enrollments.`
+        });
+        fetchData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Move Enrollment -> Inquiry
+  const handleMoveEnrollmentToInquiry = async (enr: Enrollment) => {
+    try {
+      const res = await fetch(`/api/enrollments/${encodeURIComponent(enr.id || enr.enrollment_number)}/move_to_inquiries`, {
+        method: 'POST'
+      });
+      if (res.ok) {
+        setEnrollments(prev => prev.filter(e => e.id !== enr.id && e.enrollment_number !== enr.enrollment_number));
+        setSelectedEnrollment(null);
+        setFlashMessage({
+          type: 'success',
+          text: `Moved "${enr.parent_name}" to Inquiries.`
+        });
+        fetchData();
+      }
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -277,19 +293,13 @@ export default function App() {
     setConfirmDialog({
       isOpen: true,
       title: 'Delete Inquiry',
-      message: `Are you sure you want to permanently delete inquiry from "${inq.your_name}" (${inq.ticket_number})?`,
-      confirmLabel: 'Yes, Delete',
+      message: `Permanently delete inquiry from "${inq.your_name}" (${inq.ticket_number})?`,
+      confirmLabel: 'Delete',
       confirmVariant: 'danger',
       onConfirm: async () => {
         setConfirmDialog(prev => ({ ...prev, isOpen: false }));
         setInquiries(prev => prev.filter(i => i.id !== inq.id && i.ticket_number !== inq.ticket_number));
         if (selectedInquiry?.id === inq.id) setSelectedInquiry(null);
-
-        setFlashMessage({
-          type: 'success',
-          text: `Inquiry for ${inq.your_name} deleted successfully.`
-        });
-
         try {
           const target = encodeURIComponent(inq.id || inq.ticket_number);
           await fetch(`/api/inquiries/${target}`, { method: 'DELETE' });
@@ -304,20 +314,14 @@ export default function App() {
   const requestDeleteEnrollment = (enr: Enrollment) => {
     setConfirmDialog({
       isOpen: true,
-      title: 'Delete Enrollment Record',
-      message: `Are you sure you want to permanently delete enrollment registration for "${enr.parent_name}" (${enr.enrollment_number})?`,
-      confirmLabel: 'Yes, Delete',
+      title: 'Delete Enrollment',
+      message: `Permanently delete enrollment registration for "${enr.parent_name}" (${enr.enrollment_number})?`,
+      confirmLabel: 'Delete',
       confirmVariant: 'danger',
       onConfirm: async () => {
         setConfirmDialog(prev => ({ ...prev, isOpen: false }));
         setEnrollments(prev => prev.filter(e => e.id !== enr.id && e.enrollment_number !== enr.enrollment_number));
         if (selectedEnrollment?.id === enr.id) setSelectedEnrollment(null);
-
-        setFlashMessage({
-          type: 'success',
-          text: `Enrollment for ${enr.parent_name} deleted successfully.`
-        });
-
         try {
           const target = encodeURIComponent(enr.id || enr.enrollment_number);
           await fetch(`/api/enrollments/${target}`, { method: 'DELETE' });
@@ -332,9 +336,9 @@ export default function App() {
   const requestResetAll = () => {
     setConfirmDialog({
       isOpen: true,
-      title: 'Reset All Records to 0',
-      message: 'Are you sure you want to permanently delete all inquiries and enrollments? All counters will return to 0.',
-      confirmLabel: 'Yes, Reset Everything to 0',
+      title: 'Reset All Data to 0',
+      message: 'Clear all inquiries and enrollments? All lists will be reset to zero.',
+      confirmLabel: 'Reset to 0',
       confirmVariant: 'danger',
       onConfirm: async () => {
         setConfirmDialog(prev => ({ ...prev, isOpen: false }));
@@ -342,11 +346,6 @@ export default function App() {
         setEnrollments([]);
         setSelectedInquiry(null);
         setSelectedEnrollment(null);
-        setFlashMessage({
-          type: 'success',
-          text: 'All inquiries and enrollments reset to 0.'
-        });
-
         try {
           await fetch('/api/inquiries/clear_all', { method: 'POST' });
         } catch (err) {
@@ -356,11 +355,10 @@ export default function App() {
     });
   };
 
-  // Submit Test Inquiry (/inquiry endpoint with the 5 parameters)
+  // Submit Test Inquiry
   const handleSendTestInquiry = async (e: React.FormEvent) => {
     e.preventDefault();
     setTestInqSending(true);
-
     try {
       const query = new URLSearchParams({
         'Your name': testInqName,
@@ -369,36 +367,27 @@ export default function App() {
         'What can we help with?': testInqHelpWith,
         'Your message': testInqMessage
       });
-
-      const res = await fetch(`/inquiry?${query.toString()}`, {
-        method: 'GET'
-      });
-
+      const res = await fetch(`/inquiry?${query.toString()}`);
       if (res.ok) {
         setShowTestModal(false);
         setActiveSection('inquiries');
         setFlashMessage({
           type: 'success',
-          text: `Test inquiry received from ${testInqName} via /inquiry!`
+          text: `Inquiry sent successfully to /inquiry!`
         });
         fetchData();
       }
     } catch (err) {
       console.error(err);
-      setFlashMessage({
-        type: 'danger',
-        text: 'Failed to send test inquiry.'
-      });
     } finally {
       setTestInqSending(false);
     }
   };
 
-  // Submit Test Enrollment (/enroll or /enool endpoint)
+  // Submit Test Enrollment
   const handleSendTestEnrollment = async (e: React.FormEvent) => {
     e.preventDefault();
     setTestEnrSending(true);
-
     try {
       const query = new URLSearchParams({
         parent_name: testEnrParent,
@@ -410,26 +399,18 @@ export default function App() {
         preferred_start_date: testEnrDate,
         message: testEnrNotes
       });
-
-      const res = await fetch(`${testEnrEndpoint}?${query.toString()}`, {
-        method: 'GET'
-      });
-
+      const res = await fetch(`${testEnrEndpoint}?${query.toString()}`);
       if (res.ok) {
         setShowTestModal(false);
         setActiveSection('enrollments');
         setFlashMessage({
           type: 'success',
-          text: `Test enrollment received for ${testEnrChild} via ${testEnrEndpoint}!`
+          text: `Enrollment sent successfully to ${testEnrEndpoint}!`
         });
         fetchData();
       }
     } catch (err) {
       console.error(err);
-      setFlashMessage({
-        type: 'danger',
-        text: 'Failed to send test enrollment.'
-      });
     } finally {
       setTestEnrSending(false);
     }
@@ -539,7 +520,7 @@ export default function App() {
     }
   };
 
-  // Distinct category choices for filter dropdown
+  // Distinct category choices
   const inquiryCategories = useMemo(() => {
     return Array.from(new Set(inquiries.map(i => i.what_can_we_help_with).filter(Boolean))).sort();
   }, [inquiries]);
@@ -548,1308 +529,952 @@ export default function App() {
     return Array.from(new Set(enrollments.map(e => e.preferred_program).filter(Boolean))).sort();
   }, [enrollments]);
 
-  // Stats calculation
   const inqPending = useMemo(() => inquiries.filter(i => !i.dealt).length, [inquiries]);
   const inqDealt = useMemo(() => inquiries.filter(i => i.dealt).length, [inquiries]);
   const enrPending = useMemo(() => enrollments.filter(e => !e.dealt).length, [enrollments]);
   const enrDealt = useMemo(() => enrollments.filter(e => e.dealt).length, [enrollments]);
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#fcfcfd' }}>
       
-      {/* Top Navbar */}
-      <nav className="navbar navbar-expand-lg">
-        <div className="container-fluid px-3 px-md-4">
-          <a className="navbar-brand d-flex align-items-center gap-2" href="/">
-            <i className="fas fa-shapes text-primary fs-5"></i>
-            <span className="fw-bold">Daycare Admin Portal</span>
-          </a>
-          
-          <div className="navbar-nav ms-auto d-flex flex-row gap-2 align-items-center">
+      {/* MINIMALIST TOP APP BAR */}
+      <header className="border-bottom bg-white" style={{ borderColor: '#f1f5f9' }}>
+        <div className="container-fluid px-3 px-md-4 py-2.5 d-flex justify-content-between align-items-center">
+          <div className="d-flex align-items-center gap-2">
+            <div 
+              className="d-flex align-items-center justify-content-center rounded-2 bg-dark text-white" 
+              style={{ width: '28px', height: '28px', fontSize: '13px' }}
+            >
+              <i className="fas fa-shapes"></i>
+            </div>
+            <span className="fw-semibold text-dark fs-6" style={{ letterSpacing: '-0.02em' }}>
+              Daycare Desk
+            </span>
+          </div>
+
+          <div className="d-flex align-items-center gap-1.5">
+            <button 
+              className="btn btn-sm btn-light border-0 text-secondary px-2.5 py-1"
+              onClick={fetchData}
+              disabled={isRefreshing}
+              title="Refresh"
+            >
+              <i className={`fas fa-sync-alt ${isRefreshing ? 'fa-spin' : ''}`} style={{ fontSize: '12px' }}></i>
+            </button>
             <button
               onClick={() => setShowScriptModal(true)}
-              className="btn btn-outline-secondary btn-sm"
-              style={{ fontSize: '13px' }}
-              title="View Website Form Code"
+              className="btn btn-sm btn-light text-secondary border px-2.5 py-1"
+              style={{ fontSize: '12px', borderRadius: '6px' }}
             >
-              <i className="fas fa-code me-1"></i>
-              Website Code
+              <i className="fas fa-code me-1" style={{ fontSize: '11px' }}></i>
+              Embed Code
             </button>
             <button
               onClick={() => setShowTestModal(true)}
-              className="btn btn-primary btn-sm"
-              style={{ fontSize: '13px' }}
+              className="btn btn-sm btn-dark px-3 py-1"
+              style={{ fontSize: '12px', borderRadius: '6px' }}
             >
-              <i className="fas fa-paper-plane me-1"></i>
-              Submit Test Form
+              <i className="fas fa-plus me-1" style={{ fontSize: '10px' }}></i>
+              Test Form
             </button>
           </div>
         </div>
-      </nav>
+      </header>
 
-      {/* Main Content Area */}
-      <div className="container-fluid px-3 px-md-4 mt-4" style={{ maxWidth: '1440px', flex: '1 0 auto' }}>
+      {/* MAIN CONTAINER */}
+      <main className="container-fluid px-3 px-md-4 py-3" style={{ maxWidth: '1280px', flex: '1 0 auto' }}>
         
-        {/* Flash Message Alert */}
+        {/* Toast Alert */}
         {flashMessage && (
-          <div
-            className={`alert alert-${flashMessage.type} alert-dismissible fade show shadow-sm`}
-            role="alert"
+          <div 
+            className="alert alert-dismissible fade show border-0 py-2 px-3 mb-3 d-flex align-items-center justify-content-between shadow-xs"
+            style={{ 
+              backgroundColor: flashMessage.type === 'success' ? '#f0fdf4' : '#eff6ff',
+              color: flashMessage.type === 'success' ? '#166534' : '#1e40af',
+              fontSize: '13px',
+              borderRadius: '8px'
+            }}
           >
-            <i className={`fas ${flashMessage.type === 'success' ? 'fa-check-circle' : 'fa-info-circle'} me-2`}></i>
-            {flashMessage.text}
-            <button
-              type="button"
-              className="btn-close"
-              onClick={() => setFlashMessage(null)}
-            ></button>
+            <div>
+              <i className={`fas ${flashMessage.type === 'success' ? 'fa-check-circle' : 'fa-info-circle'} me-2`}></i>
+              {flashMessage.text}
+            </div>
+            <button type="button" className="btn-close py-2" onClick={() => setFlashMessage(null)}></button>
           </div>
         )}
 
-        {/* Top Header & Reset Button */}
-        <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-          <div>
-            <h1 style={{ fontSize: '1.75rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+        {/* SECTION NAVIGATION & METRICS STRIP */}
+        <div className="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-3 pb-2 border-bottom">
+          {/* Minimalist Segmented Tabs */}
+          <div className="d-inline-flex p-1 rounded-2 bg-light border" style={{ gap: '2px' }}>
+            <button
+              type="button"
+              className={`btn btn-sm border-0 py-1.5 px-3 fw-medium ${
+                activeSection === 'inquiries' 
+                  ? 'bg-white text-dark shadow-xs' 
+                  : 'text-secondary hover:text-dark'
+              }`}
+              style={{ fontSize: '13px', borderRadius: '5px' }}
+              onClick={() => {
+                setActiveSection('inquiries');
+                setSearchQuery('');
+                setFilterCategory('');
+              }}
+            >
+              <span>Inquiries</span>
+              <span 
+                className="ms-1.5 px-1.5 py-0.5 rounded-pill"
+                style={{ 
+                  fontSize: '11px',
+                  backgroundColor: activeSection === 'inquiries' ? '#0f172a' : '#e2e8f0',
+                  color: activeSection === 'inquiries' ? '#ffffff' : '#475569'
+                }}
+              >
+                {inquiries.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              className={`btn btn-sm border-0 py-1.5 px-3 fw-medium ${
+                activeSection === 'enrollments' 
+                  ? 'bg-white text-dark shadow-xs' 
+                  : 'text-secondary hover:text-dark'
+              }`}
+              style={{ fontSize: '13px', borderRadius: '5px' }}
+              onClick={() => {
+                setActiveSection('enrollments');
+                setSearchQuery('');
+                setFilterCategory('');
+              }}
+            >
+              <span>Enrollments</span>
+              <span 
+                className="ms-1.5 px-1.5 py-0.5 rounded-pill"
+                style={{ 
+                  fontSize: '11px',
+                  backgroundColor: activeSection === 'enrollments' ? '#0f172a' : '#e2e8f0',
+                  color: activeSection === 'enrollments' ? '#ffffff' : '#475569'
+                }}
+              >
+                {enrollments.length}
+              </span>
+            </button>
+          </div>
+
+          {/* Minimalist Metrics Strip */}
+          <div className="d-flex align-items-center gap-3 text-secondary small">
+            {activeSection === 'inquiries' ? (
+              <>
+                <div>Total: <strong className="text-dark">{inquiries.length}</strong></div>
+                <div className="vr my-1"></div>
+                <div className="d-flex align-items-center gap-1">
+                  <span className="rounded-circle bg-warning d-inline-block" style={{ width: '7px', height: '7px' }}></span>
+                  <span>Pending: <strong className="text-dark">{inqPending}</strong></span>
+                </div>
+                <div className="vr my-1"></div>
+                <div className="d-flex align-items-center gap-1">
+                  <span className="rounded-circle bg-success d-inline-block" style={{ width: '7px', height: '7px' }}></span>
+                  <span>Resolved: <strong className="text-dark">{inqDealt}</strong></span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div>Total: <strong className="text-dark">{enrollments.length}</strong></div>
+                <div className="vr my-1"></div>
+                <div className="d-flex align-items-center gap-1">
+                  <span className="rounded-circle bg-warning d-inline-block" style={{ width: '7px', height: '7px' }}></span>
+                  <span>Pending: <strong className="text-dark">{enrPending}</strong></span>
+                </div>
+                <div className="vr my-1"></div>
+                <div className="d-flex align-items-center gap-1">
+                  <span className="rounded-circle bg-success d-inline-block" style={{ width: '7px', height: '7px' }}></span>
+                  <span>Confirmed: <strong className="text-dark">{enrDealt}</strong></span>
+                </div>
+              </>
+            )}
+
+            {/* Quick Export & Reset */}
+            <div className="ms-2 d-flex align-items-center gap-1">
+              {(activeSection === 'inquiries' ? inquiries.length > 0 : enrollments.length > 0) && (
+                <a 
+                  href={activeSection === 'inquiries' ? '/export_inquiries' : '/export_enrollments'}
+                  className="btn btn-sm btn-link text-secondary p-0 text-decoration-none"
+                  style={{ fontSize: '12px' }}
+                  title="Export to CSV"
+                >
+                  <i className="fas fa-download me-1"></i> Export
+                </a>
+              )}
+              {(inquiries.length > 0 || enrollments.length > 0) && (
+                <button
+                  type="button"
+                  className="btn btn-sm btn-link text-danger p-0 ms-2 text-decoration-none"
+                  style={{ fontSize: '12px' }}
+                  onClick={requestResetAll}
+                  title="Reset to 0"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* CONTROLS TOOLBAR: Search, Category, Status Filter, View Toggle */}
+        <div className="row g-2 mb-3 align-items-center">
+          {/* Search Input */}
+          <div className="col-12 col-md-5">
+            <div className="input-group input-group-sm">
+              <span className="input-group-text bg-white border-end-0 text-muted" style={{ borderRadius: '6px 0 0 6px' }}>
+                <i className="fas fa-search" style={{ fontSize: '11px' }}></i>
+              </span>
+              <input
+                type="text"
+                className="form-control border-start-0"
+                style={{ borderRadius: '0 6px 6px 0', fontSize: '13px' }}
+                placeholder={activeSection === 'inquiries' ? 'Search by name, phone, email, topic...' : 'Search parent, child, program, notes...'}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              {searchQuery && (
+                <button className="btn btn-outline-secondary" type="button" onClick={() => setSearchQuery('')}>
+                  &times;
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Category Dropdown */}
+          <div className="col-6 col-md-3">
+            <select
+              className="form-select form-select-sm"
+              style={{ fontSize: '12.5px', borderRadius: '6px' }}
+              value={filterCategory}
+              onChange={(e) => setFilterCategory(e.target.value)}
+            >
               {activeSection === 'inquiries' ? (
                 <>
-                  <i className="fas fa-envelope-open-text text-primary me-2"></i>
-                  General Inquiries
+                  <option value="">All Topics ({inquiryCategories.length})</option>
+                  {inquiryCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                 </>
               ) : (
                 <>
-                  <i className="fas fa-user-graduate text-success me-2"></i>
-                  Daycare Enrollments
+                  <option value="">All Programs ({enrollmentPrograms.length})</option>
+                  {enrollmentPrograms.map(prog => <option key={prog} value={prog}>{prog}</option>)}
                 </>
               )}
-            </h1>
-            <p className="text-secondary small mb-0">
-              {activeSection === 'inquiries' 
-                ? 'Incoming messages received via the /inquiry endpoint' 
-                : 'Full daycare registrations received via the /enroll (or /enool) endpoint'}
-            </p>
+            </select>
           </div>
 
-          <div className="d-flex align-items-center gap-2 flex-wrap">
-            <button 
-              className="btn btn-outline-secondary btn-sm" 
-              onClick={fetchData}
-              disabled={isRefreshing}
-            >
-              <i className={`fas fa-sync-alt ${isRefreshing ? 'fa-spin' : ''} me-1`}></i>
-              Refresh
-            </button>
-
-            {/* Export active section */}
-            {(activeSection === 'inquiries' ? inquiries.length > 0 : enrollments.length > 0) && (
-              <a 
-                href={activeSection === 'inquiries' ? '/export_inquiries' : '/export_enrollments'} 
-                className="btn btn-outline-primary btn-sm"
+          {/* Status Filter: All / Pending / Done */}
+          <div className="col-6 col-md-4 d-flex justify-content-end align-items-center gap-2">
+            <div className="btn-group btn-group-sm" role="group">
+              <button
+                type="button"
+                className={`btn py-1 px-2.5 ${dealtFilter === 'all' ? 'btn-dark' : 'btn-outline-secondary'}`}
+                style={{ fontSize: '12px' }}
+                onClick={() => setDealtFilter('all')}
               >
-                <i className="fas fa-file-excel me-1"></i>
-                Export {activeSection === 'inquiries' ? 'Inquiries' : 'Enrollments'} CSV
-              </a>
-            )}
-
-            {(inquiries.length > 0 || enrollments.length > 0) && (
-              <button 
-                className="btn btn-outline-danger btn-sm" 
-                onClick={requestResetAll}
-                title="Reset all records to 0"
-              >
-                <i className="fas fa-trash-alt me-1"></i>
-                Reset All to 0
+                All
               </button>
-            )}
+              <button
+                type="button"
+                className={`btn py-1 px-2.5 ${dealtFilter === 'pending' ? 'btn-dark' : 'btn-outline-secondary'}`}
+                style={{ fontSize: '12px' }}
+                onClick={() => setDealtFilter('pending')}
+              >
+                Pending
+              </button>
+              <button
+                type="button"
+                className={`btn py-1 px-2.5 ${dealtFilter === 'dealt' ? 'btn-dark' : 'btn-outline-secondary'}`}
+                style={{ fontSize: '12px' }}
+                onClick={() => setDealtFilter('dealt')}
+              >
+                Done
+              </button>
+            </div>
+
+            {/* View Mode Toggle */}
+            <div className="btn-group btn-group-sm" role="group">
+              <button
+                type="button"
+                className={`btn py-1 px-2 ${viewMode === 'table' ? 'btn-secondary text-white' : 'btn-outline-secondary'}`}
+                style={{ fontSize: '12px' }}
+                onClick={() => setViewMode('table')}
+                title="Table view"
+              >
+                <i className="fas fa-table"></i>
+              </button>
+              <button
+                type="button"
+                className={`btn py-1 px-2 ${viewMode === 'cards' ? 'btn-secondary text-white' : 'btn-outline-secondary'}`}
+                style={{ fontSize: '12px' }}
+                onClick={() => setViewMode('cards')}
+                title="Card view"
+              >
+                <i className="fas fa-th-large"></i>
+              </button>
+            </div>
           </div>
-        </div>
-
-        {/* SECTION NAV TABS (Inquiries vs Enrollments) */}
-        <div className="d-flex border-bottom mb-4 gap-2 flex-wrap">
-          <button
-            type="button"
-            className={`btn pb-2 pt-2 px-3 fw-bold rounded-top-2 border-bottom-0 ${
-              activeSection === 'inquiries'
-                ? 'btn-light border text-primary shadow-xs'
-                : 'btn-link text-secondary text-decoration-none'
-            }`}
-            style={{ fontSize: '15px' }}
-            onClick={() => {
-              setActiveSection('inquiries');
-              setSearchQuery('');
-              setFilterCategory('');
-            }}
-          >
-            <i className="fas fa-comments me-2"></i>
-            1. Inquiries (`/inquiry`)
-            <span className="badge bg-primary ms-2 rounded-pill">
-              {inquiries.length}
-            </span>
-            {inqPending > 0 && (
-              <span className="badge bg-warning text-dark ms-1 rounded-pill" title="Pending Inquiries">
-                {inqPending} pending
-              </span>
-            )}
-          </button>
-
-          <button
-            type="button"
-            className={`btn pb-2 pt-2 px-3 fw-bold rounded-top-2 border-bottom-0 ${
-              activeSection === 'enrollments'
-                ? 'btn-light border text-success shadow-xs'
-                : 'btn-link text-secondary text-decoration-none'
-            }`}
-            style={{ fontSize: '15px' }}
-            onClick={() => {
-              setActiveSection('enrollments');
-              setSearchQuery('');
-              setFilterCategory('');
-            }}
-          >
-            <i className="fas fa-baby me-2"></i>
-            2. Enrollments (`/enroll` & `/enool`)
-            <span className="badge bg-success ms-2 rounded-pill">
-              {enrollments.length}
-            </span>
-            {enrPending > 0 && (
-              <span className="badge bg-warning text-dark ms-1 rounded-pill" title="Pending Enrollments">
-                {enrPending} pending
-              </span>
-            )}
-          </button>
-        </div>
-
-        {/* STATS SUMMARY BAR */}
-        <div className="row g-3 mb-4">
-          {activeSection === 'inquiries' ? (
-            <>
-              <div className="col-6 col-md-3">
-                <div className="stats-card p-3">
-                  <div className="stats-icon text-primary mb-1"><i className="fas fa-inbox"></i></div>
-                  <div className="stats-content text-center">
-                    <h3 className="fs-3 fw-bold mb-0">{inquiries.length}</h3>
-                    <p className="small text-muted mb-0">Total Inquiries</p>
-                  </div>
-                </div>
-              </div>
-              <div className="col-6 col-md-3">
-                <div className="stats-card p-3">
-                  <div className="stats-icon text-warning mb-1"><i className="fas fa-clock"></i></div>
-                  <div className="stats-content text-center">
-                    <h3 className="fs-3 fw-bold mb-0 text-warning">{inqPending}</h3>
-                    <p className="small text-muted mb-0">Pending (Need Action)</p>
-                  </div>
-                </div>
-              </div>
-              <div className="col-6 col-md-3">
-                <div className="stats-card p-3">
-                  <div className="stats-icon text-success mb-1"><i className="fas fa-check-circle"></i></div>
-                  <div className="stats-content text-center">
-                    <h3 className="fs-3 fw-bold mb-0 text-success">{inqDealt}</h3>
-                    <p className="small text-muted mb-0">Dealt / Resolved</p>
-                  </div>
-                </div>
-              </div>
-              <div className="col-6 col-md-3">
-                <div className="stats-card p-3">
-                  <div className="stats-icon text-info mb-1"><i className="fas fa-tags"></i></div>
-                  <div className="stats-content text-center">
-                    <h3 className="fs-3 fw-bold mb-0">{inquiryCategories.length}</h3>
-                    <p className="small text-muted mb-0">Topic Categories</p>
-                  </div>
-                </div>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="col-6 col-md-3">
-                <div className="stats-card p-3">
-                  <div className="stats-icon text-success mb-1"><i className="fas fa-id-card"></i></div>
-                  <div className="stats-content text-center">
-                    <h3 className="fs-3 fw-bold mb-0">{enrollments.length}</h3>
-                    <p className="small text-muted mb-0">Total Enrollments</p>
-                  </div>
-                </div>
-              </div>
-              <div className="col-6 col-md-3">
-                <div className="stats-card p-3">
-                  <div className="stats-icon text-warning mb-1"><i className="fas fa-user-clock"></i></div>
-                  <div className="stats-content text-center">
-                    <h3 className="fs-3 fw-bold mb-0 text-warning">{enrPending}</h3>
-                    <p className="small text-muted mb-0">Pending Admission</p>
-                  </div>
-                </div>
-              </div>
-              <div className="col-6 col-md-3">
-                <div className="stats-card p-3">
-                  <div className="stats-icon text-success mb-1"><i className="fas fa-check-double"></i></div>
-                  <div className="stats-content text-center">
-                    <h3 className="fs-3 fw-bold mb-0 text-success">{enrDealt}</h3>
-                    <p className="small text-muted mb-0">Confirmed / Enrolled</p>
-                  </div>
-                </div>
-              </div>
-              <div className="col-6 col-md-3">
-                <div className="stats-card p-3">
-                  <div className="stats-icon text-primary mb-1"><i className="fas fa-graduation-cap"></i></div>
-                  <div className="stats-content text-center">
-                    <h3 className="fs-3 fw-bold mb-0">{enrollmentPrograms.length}</h3>
-                    <p className="small text-muted mb-0">Registered Programs</p>
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
         </div>
 
         {/* SECTION 1: INQUIRIES VIEW */}
         {activeSection === 'inquiries' && (
-          <div className="card shadow-xs border">
-            {/* Header with View Toggle & Status Filter */}
-            <div className="card-header d-flex justify-content-between align-items-center flex-wrap gap-2 py-3">
-              <div className="d-flex align-items-center gap-2">
-                <h5 className="card-title mb-0 fs-6 fw-bold">
-                  <i className="fas fa-list me-2 text-primary"></i>
-                  Inquiries List
-                </h5>
-                <span className="badge bg-secondary" style={{ fontSize: '12px' }}>
-                  {filteredInquiries.length} shown
-                </span>
-                <span className="badge bg-light text-dark border small d-none d-sm-inline">
-                  5 Fields: Your name • Phone • Email • What can we help with? • Your message
-                </span>
-              </div>
-
-              <div className="d-flex align-items-center gap-2 flex-wrap">
-                {/* View Toggle: Table vs Cards */}
-                <div className="btn-group btn-group-sm" role="group">
-                  <button
-                    type="button"
-                    className={`btn ${viewMode === 'table' ? 'btn-dark' : 'btn-outline-secondary'}`}
-                    onClick={() => setViewMode('table')}
-                  >
-                    <i className="fas fa-table me-1"></i> Table
-                  </button>
-                  <button
-                    type="button"
-                    className={`btn ${viewMode === 'cards' ? 'btn-dark' : 'btn-outline-secondary'}`}
-                    onClick={() => setViewMode('cards')}
-                  >
-                    <i className="fas fa-th-large me-1"></i> Cards
-                  </button>
+          <div>
+            {inquiries.length === 0 ? (
+              <div className="text-center py-5 bg-white rounded-3 border" style={{ borderColor: '#f1f5f9' }}>
+                <div className="mb-2 text-muted" style={{ opacity: 0.4 }}>
+                  <i className="fas fa-inbox fa-2x"></i>
                 </div>
-
-                {/* Filter Status: All / Pending / Dealt */}
-                <div className="btn-group btn-group-sm" role="group">
-                  <button
-                    type="button"
-                    className={`btn ${dealtFilter === 'all' ? 'btn-primary' : 'btn-outline-secondary'}`}
-                    onClick={() => setDealtFilter('all')}
-                  >
-                    All ({inquiries.length})
-                  </button>
-                  <button
-                    type="button"
-                    className={`btn ${dealtFilter === 'pending' ? 'btn-warning text-dark' : 'btn-outline-secondary'}`}
-                    onClick={() => setDealtFilter('pending')}
-                  >
-                    Pending ({inqPending})
-                  </button>
-                  <button
-                    type="button"
-                    className={`btn ${dealtFilter === 'dealt' ? 'btn-success' : 'btn-outline-secondary'}`}
-                    onClick={() => setDealtFilter('dealt')}
-                  >
-                    Dealt ({inqDealt})
-                  </button>
-                </div>
+                <h6 className="fw-semibold text-dark mb-1">No inquiries yet</h6>
+                <p className="text-muted small mb-3">
+                  Messages submitted to <code>/inquiry</code> with the 5 parameters will appear here.
+                </p>
+                <button
+                  onClick={() => {
+                    setTestModalTab('inquiry');
+                    setShowTestModal(true);
+                  }}
+                  className="btn btn-sm btn-dark px-3 py-1.5"
+                  style={{ borderRadius: '6px', fontSize: '12.5px' }}
+                >
+                  <i className="fas fa-paper-plane me-1"></i> Send Sample Inquiry
+                </button>
               </div>
-            </div>
-
-            <div className="card-body p-3">
-              {inquiries.length > 0 ? (
-                <>
-                  {/* Search and Category Filter */}
-                  <div className="row g-2 mb-3">
-                    <div className="col-md-7">
-                      <div className="input-group">
-                        <span className="input-group-text bg-white">
-                          <i className="fas fa-search text-muted"></i>
-                        </span>
-                        <input
-                          type="text"
-                          className="form-control"
-                          placeholder="Search by Your Name, Phone, Email, Topic, or Message..."
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                        />
-                        {searchQuery && (
-                          <button 
-                            className="btn btn-outline-secondary" 
-                            type="button" 
-                            onClick={() => setSearchQuery('')}
-                          >
-                            &times;
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <div className="col-md-5">
-                      <select
-                        className="form-select"
-                        value={filterCategory}
-                        onChange={(e) => setFilterCategory(e.target.value)}
-                      >
-                        <option value="">All Inquiry Topics ({inquiryCategories.length})</option>
-                        {inquiryCategories.map(cat => (
-                          <option key={cat} value={cat}>{cat}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Responsive Scroll / Mode Helper */}
-                  <div className="d-flex justify-content-between align-items-center mb-2 px-1 text-muted small">
-                    <span>
-                      <i className="fas fa-info-circle text-primary me-1"></i>
-                      {viewMode === 'table'
-                        ? 'Table scrolls horizontally on touch/narrow screens, or switch to Cards view.'
-                        : 'Cards View is formatted for easy viewing and quick calling on mobile screens.'}
-                    </span>
-                    <span className="badge bg-light text-secondary border">
-                      {viewMode === 'table' ? '↔ Horizontal Scroll' : '📱 Responsive Cards'}
-                    </span>
-                  </div>
-
-                  {viewMode === 'table' ? (
-                    /* SPREADSHEET TABLE: 5 INQUIRY PARAMETERS */
-                    <div className="table-responsive shadow-xs">
-                      <table className="table table-hover align-middle mb-0" style={{ minWidth: '980px' }}>
-                        <thead>
-                          <tr>
-                            <th style={{ width: '115px', minWidth: '115px', textAlign: 'center', whiteSpace: 'nowrap' }} onClick={() => handleSort(0)}>
-                              Tick / Done <i className="fas fa-sort"></i>
-                            </th>
-                            <th style={{ width: '180px', minWidth: '180px', whiteSpace: 'nowrap' }} onClick={() => handleSort(1)}>
-                              Your Name <i className="fas fa-sort"></i>
-                            </th>
-                            <th style={{ width: '150px', minWidth: '150px', whiteSpace: 'nowrap' }} onClick={() => handleSort(2)}>
-                              Phone Number <i className="fas fa-sort"></i>
-                            </th>
-                            <th style={{ width: '200px', minWidth: '200px' }} onClick={() => handleSort(3)}>
-                              Email Address <i className="fas fa-sort"></i>
-                            </th>
-                            <th style={{ width: '190px', minWidth: '190px', whiteSpace: 'nowrap' }} onClick={() => handleSort(4)}>
-                              What Can We Help With? <i className="fas fa-sort"></i>
-                            </th>
-                            <th style={{ minWidth: '240px' }}>Your Message</th>
-                            <th style={{ width: '130px', minWidth: '130px', whiteSpace: 'nowrap' }} onClick={() => handleSort(5)}>
-                              Date Received <i className="fas fa-sort"></i>
-                            </th>
-                            <th style={{ width: '95px', minWidth: '95px', textAlign: 'center', whiteSpace: 'nowrap' }}>Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {sortedInquiries.length === 0 ? (
-                            <tr>
-                              <td colSpan={8} className="text-center py-4 text-muted">
-                                No inquiries match your search or filter.
-                              </td>
-                            </tr>
-                          ) : (
-                            sortedInquiries.map((inq) => (
-                              <tr
-                                key={inq.id}
-                                style={{
-                                  cursor: 'pointer',
-                                  backgroundColor: inq.dealt ? '#f8fafc' : '#ffffff'
-                                }}
-                                onClick={() => setSelectedInquiry(inq)}
-                              >
-                                {/* 1. Tick / Done */}
-                                <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleToggleInquiryDealt(inq.id, !inq.dealt)}
-                                    className="btn btn-sm"
-                                    style={{
-                                      backgroundColor: inq.dealt ? '#ecfdf5' : '#f8fafc',
-                                      borderColor: inq.dealt ? '#10b981' : '#cbd5e1',
-                                      color: inq.dealt ? '#047857' : '#64748b',
-                                      fontSize: '12px',
-                                      fontWeight: 600,
-                                      padding: '0.25rem 0.65rem',
-                                      borderRadius: '6px'
-                                    }}
-                                  >
-                                    <i className={inq.dealt ? 'fas fa-check-circle text-success me-1' : 'far fa-circle text-muted me-1'}></i>
-                                    {inq.dealt ? 'Dealt' : 'Pending'}
-                                  </button>
-                                </td>
-
-                                {/* 2. Your Name */}
-                                <td>
-                                  <div className="d-flex align-items-center gap-1.5 flex-wrap">
-                                    <strong style={{ color: inq.dealt ? '#475569' : '#0f172a' }}>
-                                      {inq.your_name}
-                                    </strong>
-                                    {inq.dealt && <span className="badge bg-success ms-1" style={{ fontSize: '10px' }}>Done</span>}
-                                  </div>
-                                  <small className="text-muted font-monospace" style={{ fontSize: '11px' }}>
-                                    {inq.ticket_number}
-                                  </small>
-                                </td>
-
-                                {/* 3. Phone Number */}
-                                <td style={{ whiteSpace: 'nowrap' }}>
-                                  {inq.phone ? (
-                                    <a
-                                      href={`tel:${inq.phone}`}
-                                      onClick={(e) => e.stopPropagation()}
-                                      className="text-decoration-none text-dark fw-medium"
-                                      style={{ fontSize: '13px' }}
-                                    >
-                                      <i className="fas fa-phone-alt text-muted me-1" style={{ fontSize: '11px' }}></i>
-                                      {inq.phone}
-                                    </a>
-                                  ) : (
-                                    <span className="text-muted">-</span>
-                                  )}
-                                </td>
-
-                                {/* 4. Email Address */}
-                                <td style={{ wordBreak: 'break-all' }}>
-                                  <a
-                                    href={`mailto:${inq.email}`}
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="text-decoration-none text-secondary"
-                                    style={{ fontSize: '13px' }}
-                                  >
-                                    {inq.email}
-                                  </a>
-                                </td>
-
-                                {/* 5. What Can We Help With? */}
-                                <td style={{ whiteSpace: 'nowrap' }}>
-                                  <span style={{
-                                    background: inq.dealt ? '#f3f4f6' : '#e0e7ff',
-                                    color: inq.dealt ? '#4b5563' : '#3730a3',
-                                    padding: '0.25rem 0.65rem',
-                                    borderRadius: '6px',
-                                    fontSize: '12px',
-                                    fontWeight: 600,
-                                    display: 'inline-block'
-                                  }}>
-                                    {inq.what_can_we_help_with}
-                                  </span>
-                                </td>
-
-                                {/* 6. Your Message */}
-                                <td style={{ maxWidth: '280px' }}>
-                                  <div className="text-truncate small text-secondary" title={inq.your_message || 'No message'}>
-                                    {inq.your_message || <em className="text-muted">No message</em>}
-                                  </div>
-                                </td>
-
-                                {/* 7. Date Received */}
-                                <td style={{ whiteSpace: 'nowrap', fontSize: '12px' }}>
-                                  <span className="text-muted">
-                                    <i className="far fa-clock me-1"></i>
-                                    {inq.timestamp}
-                                  </span>
-                                </td>
-
-                                {/* Actions */}
-                                <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
-                                  <div className="btn-group btn-group-sm">
-                                    <button
-                                      type="button"
-                                      className="btn btn-outline-primary"
-                                      onClick={() => setSelectedInquiry(inq)}
-                                      title="View inquiry details"
-                                    >
-                                      <i className="fas fa-eye"></i>
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="btn btn-outline-danger"
-                                      onClick={() => requestDeleteInquiry(inq)}
-                                      title="Delete inquiry"
-                                    >
-                                      <i className="fas fa-trash"></i>
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    /* RESPONSIVE CARDS VIEW FOR INQUIRIES */
-                    <div className="row g-3">
+            ) : viewMode === 'table' ? (
+              /* CLEAN MINIMALIST TABLE: INQUIRIES */
+              <div className="bg-white rounded-3 border shadow-xs overflow-hidden" style={{ borderColor: '#f1f5f9' }}>
+                <div className="table-responsive">
+                  <table className="table table-hover align-middle mb-0" style={{ minWidth: '920px', fontSize: '13px' }}>
+                    <thead>
+                      <tr className="bg-light" style={{ borderBottom: '1px solid #e2e8f0' }}>
+                        <th style={{ width: '95px', minWidth: '95px', textAlign: 'center', whiteSpace: 'nowrap' }} onClick={() => handleSort(0)}>
+                          Status <i className="fas fa-sort text-muted ms-1" style={{ fontSize: '10px' }}></i>
+                        </th>
+                        <th style={{ minWidth: '160px', whiteSpace: 'nowrap' }} onClick={() => handleSort(1)}>
+                          Your Name <i className="fas fa-sort text-muted ms-1" style={{ fontSize: '10px' }}></i>
+                        </th>
+                        <th style={{ minWidth: '130px', whiteSpace: 'nowrap' }} onClick={() => handleSort(2)}>
+                          Phone <i className="fas fa-sort text-muted ms-1" style={{ fontSize: '10px' }}></i>
+                        </th>
+                        <th style={{ minWidth: '170px' }} onClick={() => handleSort(3)}>
+                          Email Address <i className="fas fa-sort text-muted ms-1" style={{ fontSize: '10px' }}></i>
+                        </th>
+                        <th style={{ minWidth: '170px', whiteSpace: 'nowrap' }} onClick={() => handleSort(4)}>
+                          What Can We Help With? <i className="fas fa-sort text-muted ms-1" style={{ fontSize: '10px' }}></i>
+                        </th>
+                        <th style={{ minWidth: '220px' }}>Your Message</th>
+                        <th style={{ width: '110px', minWidth: '110px', whiteSpace: 'nowrap' }} onClick={() => handleSort(5)}>
+                          Date <i className="fas fa-sort text-muted ms-1" style={{ fontSize: '10px' }}></i>
+                        </th>
+                        <th style={{ width: '80px', minWidth: '80px', textAlign: 'center' }}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
                       {sortedInquiries.length === 0 ? (
-                        <div className="col-12 text-center py-4 text-muted">
-                          No inquiries match your search or filter.
-                        </div>
+                        <tr>
+                          <td colSpan={8} className="text-center py-4 text-muted small">
+                            No inquiries match your filter.
+                          </td>
+                        </tr>
                       ) : (
                         sortedInquiries.map((inq) => (
-                          <div key={inq.id} className="col-12 col-md-6 col-xl-4">
-                            <div
-                              className="card h-100 border shadow-xs"
-                              style={{
-                                backgroundColor: inq.dealt ? '#f8fafc' : '#ffffff',
-                                borderRadius: '12px'
-                              }}
-                            >
-                              <div className="card-header bg-transparent border-bottom d-flex justify-content-between align-items-center py-2 px-3">
-                                <button
-                                  type="button"
-                                  onClick={() => handleToggleInquiryDealt(inq.id, !inq.dealt)}
-                                  className="btn btn-sm"
-                                  style={{
-                                    backgroundColor: inq.dealt ? '#ecfdf5' : '#f1f5f9',
-                                    borderColor: inq.dealt ? '#10b981' : '#cbd5e1',
-                                    color: inq.dealt ? '#047857' : '#475569',
-                                    fontSize: '12px',
-                                    fontWeight: 600,
-                                    padding: '0.2rem 0.6rem',
-                                    borderRadius: '6px'
-                                  }}
+                          <tr
+                            key={inq.id}
+                            style={{ cursor: 'pointer', backgroundColor: inq.dealt ? '#fcfdfd' : '#ffffff' }}
+                            onClick={() => setSelectedInquiry(inq)}
+                          >
+                            {/* Status Toggle */}
+                            <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleInquiryDealt(inq.id, !inq.dealt)}
+                                className="btn btn-sm border-0 py-0.5 px-2"
+                                style={{
+                                  backgroundColor: inq.dealt ? '#ecfdf5' : '#fef3c7',
+                                  color: inq.dealt ? '#065f46' : '#92400e',
+                                  fontSize: '11.5px',
+                                  fontWeight: 500,
+                                  borderRadius: '12px'
+                                }}
+                                title="Click to toggle Done / Pending"
+                              >
+                                {inq.dealt ? '✓ Done' : '○ Pending'}
+                              </button>
+                            </td>
+
+                            {/* Name */}
+                            <td>
+                              <span className="fw-semibold text-dark">{inq.your_name}</span>
+                              <div className="text-muted font-monospace" style={{ fontSize: '10.5px' }}>
+                                {inq.ticket_number}
+                              </div>
+                            </td>
+
+                            {/* Phone */}
+                            <td style={{ whiteSpace: 'nowrap' }}>
+                              {inq.phone ? (
+                                <a 
+                                  href={`tel:${inq.phone}`} 
+                                  onClick={(e) => e.stopPropagation()} 
+                                  className="text-decoration-none text-dark"
                                 >
-                                  <i className={inq.dealt ? 'fas fa-check-circle text-success me-1' : 'far fa-circle text-muted me-1'}></i>
-                                  {inq.dealt ? 'Dealt' : 'Pending'}
-                                </button>
-                                
-                                <div className="d-flex align-items-center gap-2">
-                                  <span className="badge bg-light text-secondary border font-monospace" style={{ fontSize: '11px' }}>
-                                    {inq.ticket_number}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    className="btn btn-sm btn-outline-danger border-0 p-1"
-                                    onClick={() => requestDeleteInquiry(inq)}
-                                    title="Delete inquiry"
-                                  >
-                                    <i className="fas fa-trash-alt"></i>
-                                  </button>
-                                </div>
+                                  {inq.phone}
+                                </a>
+                              ) : (
+                                <span className="text-muted">-</span>
+                              )}
+                            </td>
+
+                            {/* Email */}
+                            <td style={{ wordBreak: 'break-all' }}>
+                              <a 
+                                href={`mailto:${inq.email}`} 
+                                onClick={(e) => e.stopPropagation()} 
+                                className="text-decoration-none text-secondary"
+                              >
+                                {inq.email}
+                              </a>
+                            </td>
+
+                            {/* Topic */}
+                            <td style={{ whiteSpace: 'nowrap' }}>
+                              <span className="badge bg-light text-dark border fw-normal" style={{ fontSize: '11.5px' }}>
+                                {inq.what_can_we_help_with}
+                              </span>
+                            </td>
+
+                            {/* Message */}
+                            <td style={{ maxWidth: '240px' }}>
+                              <div className="text-truncate text-secondary small" title={inq.your_message || ''}>
+                                {inq.your_message || <em className="text-muted">No message</em>}
                               </div>
+                            </td>
 
-                              <div className="card-body p-3">
-                                <h6 className="fw-bold text-dark mb-2">
-                                  <i className="fas fa-user-circle text-primary me-1.5"></i>
-                                  {inq.your_name}
-                                </h6>
+                            {/* Date */}
+                            <td style={{ whiteSpace: 'nowrap', fontSize: '11.5px', color: '#64748b' }}>
+                              {inq.timestamp ? inq.timestamp.slice(5, 16) : ''}
+                            </td>
 
-                                <div className="mb-2">
-                                  <span className="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1" style={{ fontSize: '12px' }}>
-                                    Topic: {inq.what_can_we_help_with}
-                                  </span>
-                                </div>
-
-                                <div className="small mb-2.5">
-                                  {inq.phone && (
-                                    <div className="mb-1">
-                                      <a href={`tel:${inq.phone}`} className="text-decoration-none text-dark fw-medium d-inline-flex align-items-center gap-1">
-                                        <i className="fas fa-phone-alt text-success" style={{ width: '16px' }}></i>
-                                        {inq.phone}
-                                      </a>
-                                    </div>
-                                  )}
-                                  <div>
-                                    <a href={`mailto:${inq.email}`} className="text-decoration-none text-secondary d-inline-flex align-items-center gap-1 text-truncate" style={{ maxWidth: '100%' }}>
-                                      <i className="fas fa-envelope text-primary" style={{ width: '16px' }}></i>
-                                      {inq.email}
-                                    </a>
-                                  </div>
-                                </div>
-
-                                {inq.your_message && (
-                                  <div className="p-2 rounded border bg-light-subtle small text-muted text-truncate" title={inq.your_message}>
-                                    <i className="fas fa-quote-left text-muted me-1" style={{ opacity: 0.5 }}></i>
-                                    {inq.your_message}
-                                  </div>
-                                )}
-                              </div>
-
-                              <div className="card-footer bg-transparent border-top py-2 px-3 d-flex justify-content-between align-items-center">
-                                <small className="text-muted" style={{ fontSize: '11px' }}>
-                                  <i className="far fa-clock me-1"></i>
-                                  {inq.timestamp}
-                                </small>
+                            {/* Actions */}
+                            <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
+                              <div className="d-flex justify-content-center gap-1">
                                 <button
                                   type="button"
-                                  className="btn btn-outline-primary btn-sm py-1 px-2"
-                                  style={{ fontSize: '12px' }}
+                                  className="btn btn-sm btn-light border-0 text-muted p-1"
                                   onClick={() => setSelectedInquiry(inq)}
+                                  title="View details"
                                 >
-                                  <i className="fas fa-eye me-1"></i>
-                                  Details
+                                  <i className="fas fa-eye" style={{ fontSize: '12px' }}></i>
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-light border-0 text-danger p-1"
+                                  onClick={() => requestDeleteInquiry(inq)}
+                                  title="Delete"
+                                >
+                                  <i className="fas fa-trash-alt" style={{ fontSize: '12px' }}></i>
                                 </button>
                               </div>
-                            </div>
-                          </div>
+                            </td>
+                          </tr>
                         ))
                       )}
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="text-center py-5">
-                  <i className="fas fa-envelope-open fa-3x text-muted mb-3" style={{ opacity: 0.5 }}></i>
-                  <h5>No inquiries yet</h5>
-                  <p className="text-muted mb-3">
-                    Submissions from your website inquiry form (using <code>/inquiry</code>) will appear here in real time.
-                  </p>
-                  <div className="d-flex justify-content-center gap-2">
-                    <button
-                      onClick={() => {
-                        setTestModalTab('inquiry');
-                        setShowTestModal(true);
-                      }}
-                      className="btn btn-primary btn-sm"
-                    >
-                      <i className="fas fa-paper-plane me-1"></i>
-                      Send Sample Inquiry
-                    </button>
-                    <button
-                      onClick={() => {
-                        setScriptModalTab('inquiry');
-                        setShowScriptModal(true);
-                      }}
-                      className="btn btn-outline-secondary btn-sm"
-                    >
-                      <i className="fas fa-code me-1"></i>
-                      Get /inquiry Code
-                    </button>
-                  </div>
+                    </tbody>
+                  </table>
                 </div>
-              )}
-            </div>
+              </div>
+            ) : (
+              /* CLEAN MINIMALIST CARDS: INQUIRIES */
+              <div className="row g-2.5">
+                {sortedInquiries.map((inq) => (
+                  <div key={inq.id} className="col-12 col-md-6 col-xl-4">
+                    <div 
+                      className="bg-white p-3 rounded-3 border shadow-xs h-100 d-flex flex-column justify-content-between"
+                      style={{ borderColor: '#f1f5f9' }}
+                    >
+                      <div>
+                        <div className="d-flex justify-content-between align-items-center mb-2">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleInquiryDealt(inq.id, !inq.dealt)}
+                            className="btn btn-sm border-0 py-0.5 px-2"
+                            style={{
+                              backgroundColor: inq.dealt ? '#ecfdf5' : '#fef3c7',
+                              color: inq.dealt ? '#065f46' : '#92400e',
+                              fontSize: '11.5px',
+                              fontWeight: 500,
+                              borderRadius: '12px'
+                            }}
+                          >
+                            {inq.dealt ? '✓ Done' : '○ Pending'}
+                          </button>
+                          <span className="text-muted font-monospace" style={{ fontSize: '11px' }}>
+                            {inq.ticket_number}
+                          </span>
+                        </div>
+
+                        <h6 className="fw-bold text-dark mb-1">{inq.your_name}</h6>
+                        
+                        <div className="mb-2">
+                          <span className="badge bg-light text-dark border fw-normal" style={{ fontSize: '11px' }}>
+                            {inq.what_can_we_help_with}
+                          </span>
+                        </div>
+
+                        <div className="small mb-2 text-secondary">
+                          {inq.phone && (
+                            <div>
+                              <a href={`tel:${inq.phone}`} className="text-decoration-none text-dark">
+                                <i className="fas fa-phone-alt me-1 text-muted" style={{ fontSize: '10px' }}></i>
+                                {inq.phone}
+                              </a>
+                            </div>
+                          )}
+                          <div className="text-truncate">
+                            <a href={`mailto:${inq.email}`} className="text-decoration-none text-secondary">
+                              <i className="fas fa-envelope me-1 text-muted" style={{ fontSize: '10px' }}></i>
+                              {inq.email}
+                            </a>
+                          </div>
+                        </div>
+
+                        {inq.your_message && (
+                          <div className="p-2 rounded bg-light small text-secondary text-truncate mb-2" style={{ fontSize: '12px' }}>
+                            {inq.your_message}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="d-flex justify-content-between align-items-center pt-2 border-top">
+                        <small className="text-muted" style={{ fontSize: '11px' }}>
+                          {inq.timestamp ? inq.timestamp.slice(5, 16) : ''}
+                        </small>
+                        <div className="d-flex gap-1">
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-light border text-secondary px-2 py-0.5"
+                            style={{ fontSize: '11.5px', borderRadius: '4px' }}
+                            onClick={() => setSelectedInquiry(inq)}
+                          >
+                            Details
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-light border-0 text-danger p-1"
+                            onClick={() => requestDeleteInquiry(inq)}
+                          >
+                            <i className="fas fa-trash-alt" style={{ fontSize: '11px' }}></i>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
         {/* SECTION 2: ENROLLMENTS VIEW */}
         {activeSection === 'enrollments' && (
-          <div className="card shadow-xs border">
-            {/* Header with View Toggle & Status Filter */}
-            <div className="card-header d-flex justify-content-between align-items-center flex-wrap gap-2 py-3">
-              <div className="d-flex align-items-center gap-2">
-                <h5 className="card-title mb-0 fs-6 fw-bold">
-                  <i className="fas fa-user-graduate me-2 text-success"></i>
-                  Daycare Enrollments List
-                </h5>
-                <span className="badge bg-secondary" style={{ fontSize: '12px' }}>
-                  {filteredEnrollments.length} shown
-                </span>
-                <span className="badge bg-light text-dark border small d-none d-sm-inline">
-                  Endpoint: <code>/enroll</code> (or <code>/enool</code>)
-                </span>
-              </div>
-
-              <div className="d-flex align-items-center gap-2 flex-wrap">
-                {/* View Toggle */}
-                <div className="btn-group btn-group-sm" role="group">
-                  <button
-                    type="button"
-                    className={`btn ${viewMode === 'table' ? 'btn-dark' : 'btn-outline-secondary'}`}
-                    onClick={() => setViewMode('table')}
-                  >
-                    <i className="fas fa-table me-1"></i> Table
-                  </button>
-                  <button
-                    type="button"
-                    className={`btn ${viewMode === 'cards' ? 'btn-dark' : 'btn-outline-secondary'}`}
-                    onClick={() => setViewMode('cards')}
-                  >
-                    <i className="fas fa-th-large me-1"></i> Cards
-                  </button>
+          <div>
+            {enrollments.length === 0 ? (
+              <div className="text-center py-5 bg-white rounded-3 border" style={{ borderColor: '#f1f5f9' }}>
+                <div className="mb-2 text-muted" style={{ opacity: 0.4 }}>
+                  <i className="fas fa-user-graduate fa-2x"></i>
                 </div>
-
-                {/* Filter Status: All / Pending / Dealt */}
-                <div className="btn-group btn-group-sm" role="group">
-                  <button
-                    type="button"
-                    className={`btn ${dealtFilter === 'all' ? 'btn-success' : 'btn-outline-secondary'}`}
-                    onClick={() => setDealtFilter('all')}
-                  >
-                    All ({enrollments.length})
-                  </button>
-                  <button
-                    type="button"
-                    className={`btn ${dealtFilter === 'pending' ? 'btn-warning text-dark' : 'btn-outline-secondary'}`}
-                    onClick={() => setDealtFilter('pending')}
-                  >
-                    Pending ({enrPending})
-                  </button>
-                  <button
-                    type="button"
-                    className={`btn ${dealtFilter === 'dealt' ? 'btn-success' : 'btn-outline-secondary'}`}
-                    onClick={() => setDealtFilter('dealt')}
-                  >
-                    Confirmed ({enrDealt})
-                  </button>
-                </div>
+                <h6 className="fw-semibold text-dark mb-1">No enrollments yet</h6>
+                <p className="text-muted small mb-3">
+                  Registrations submitted to <code>/enroll</code> (or <code>/enool</code>) will appear here.
+                </p>
+                <button
+                  onClick={() => {
+                    setTestModalTab('enrollment');
+                    setShowTestModal(true);
+                  }}
+                  className="btn btn-sm btn-dark px-3 py-1.5"
+                  style={{ borderRadius: '6px', fontSize: '12.5px' }}
+                >
+                  <i className="fas fa-paper-plane me-1"></i> Send Sample Enrollment
+                </button>
               </div>
-            </div>
-
-            <div className="card-body p-3">
-              {enrollments.length > 0 ? (
-                <>
-                  {/* Search and Program Filter */}
-                  <div className="row g-2 mb-3">
-                    <div className="col-md-7">
-                      <div className="input-group">
-                        <span className="input-group-text bg-white">
-                          <i className="fas fa-search text-muted"></i>
-                        </span>
-                        <input
-                          type="text"
-                          className="form-control"
-                          placeholder="Search Parent, Child Name, Age, Phone, Email, Program, or Notes..."
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                        />
-                        {searchQuery && (
-                          <button 
-                            className="btn btn-outline-secondary" 
-                            type="button" 
-                            onClick={() => setSearchQuery('')}
-                          >
-                            &times;
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <div className="col-md-5">
-                      <select
-                        className="form-select"
-                        value={filterCategory}
-                        onChange={(e) => setFilterCategory(e.target.value)}
-                      >
-                        <option value="">All Programs ({enrollmentPrograms.length})</option>
-                        {enrollmentPrograms.map(prog => (
-                          <option key={prog} value={prog}>{prog}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Responsive Scroll / Mode Helper */}
-                  <div className="d-flex justify-content-between align-items-center mb-2 px-1 text-muted small">
-                    <span>
-                      <i className="fas fa-info-circle text-success me-1"></i>
-                      {viewMode === 'table'
-                        ? 'Table scrolls horizontally on touch/narrow screens, or switch to Cards view.'
-                        : 'Cards View shows full child, program, and parent details on mobile screens.'}
-                    </span>
-                    <span className="badge bg-light text-secondary border">
-                      {viewMode === 'table' ? '↔ Horizontal Scroll' : '📱 Responsive Cards'}
-                    </span>
-                  </div>
-
-                  {viewMode === 'table' ? (
-                    /* SPREADSHEET TABLE: ENROLLMENTS */
-                    <div className="table-responsive shadow-xs">
-                      <table className="table table-hover align-middle mb-0" style={{ minWidth: '1140px' }}>
-                        <thead>
-                          <tr>
-                            <th style={{ width: '120px', minWidth: '120px', textAlign: 'center', whiteSpace: 'nowrap' }} onClick={() => handleSort(0)}>
-                              Tick / Done <i className="fas fa-sort"></i>
-                            </th>
-                            <th style={{ width: '170px', minWidth: '170px', whiteSpace: 'nowrap' }} onClick={() => handleSort(1)}>
-                              Parent / Guardian <i className="fas fa-sort"></i>
-                            </th>
-                            <th style={{ width: '150px', minWidth: '150px', whiteSpace: 'nowrap' }} onClick={() => handleSort(2)}>
-                              Child & Age <i className="fas fa-sort"></i>
-                            </th>
-                            <th style={{ width: '140px', minWidth: '140px', whiteSpace: 'nowrap' }} onClick={() => handleSort(3)}>
-                              Phone <i className="fas fa-sort"></i>
-                            </th>
-                            <th style={{ width: '190px', minWidth: '190px' }} onClick={() => handleSort(4)}>
-                              Email Address <i className="fas fa-sort"></i>
-                            </th>
-                            <th style={{ width: '180px', minWidth: '180px', whiteSpace: 'nowrap' }} onClick={() => handleSort(5)}>
-                              Preferred Program <i className="fas fa-sort"></i>
-                            </th>
-                            <th style={{ width: '125px', minWidth: '125px', whiteSpace: 'nowrap' }} onClick={() => handleSort(6)}>
-                              Start Date <i className="fas fa-sort"></i>
-                            </th>
-                            <th style={{ minWidth: '220px', maxWidth: '300px' }}>Notes / Special Needs</th>
-                            <th style={{ width: '95px', minWidth: '95px', textAlign: 'center', whiteSpace: 'nowrap' }}>Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {sortedEnrollments.length === 0 ? (
-                            <tr>
-                              <td colSpan={9} className="text-center py-4 text-muted">
-                                No enrollments match your search or filter.
-                              </td>
-                            </tr>
-                          ) : (
-                            sortedEnrollments.map((enr) => (
-                              <tr
-                                key={enr.id}
-                                style={{
-                                  cursor: 'pointer',
-                                  backgroundColor: enr.dealt ? '#f8fafc' : '#ffffff'
-                                }}
-                                onClick={() => setSelectedEnrollment(enr)}
-                              >
-                                {/* 1. Tick / Done */}
-                                <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleToggleEnrollmentDealt(enr.id, !enr.dealt)}
-                                    className="btn btn-sm"
-                                    style={{
-                                      backgroundColor: enr.dealt ? '#ecfdf5' : '#f8fafc',
-                                      borderColor: enr.dealt ? '#10b981' : '#cbd5e1',
-                                      color: enr.dealt ? '#047857' : '#64748b',
-                                      fontSize: '12px',
-                                      fontWeight: 600,
-                                      padding: '0.25rem 0.65rem',
-                                      borderRadius: '6px'
-                                    }}
-                                  >
-                                    <i className={enr.dealt ? 'fas fa-check-circle text-success me-1' : 'far fa-circle text-muted me-1'}></i>
-                                    {enr.dealt ? 'Confirmed' : 'Pending'}
-                                  </button>
-                                </td>
-
-                                {/* 2. Parent Name */}
-                                <td>
-                                  <div className="d-flex align-items-center gap-1.5 flex-wrap">
-                                    <strong style={{ color: enr.dealt ? '#475569' : '#0f172a' }}>
-                                      {enr.parent_name}
-                                    </strong>
-                                    {enr.dealt && <span className="badge bg-success ms-1" style={{ fontSize: '10px' }}>Confirmed</span>}
-                                  </div>
-                                  <small className="text-muted font-monospace" style={{ fontSize: '11px' }}>
-                                    {enr.enrollment_number}
-                                  </small>
-                                </td>
-
-                                {/* 3. Child & Age */}
-                                <td style={{ whiteSpace: 'nowrap' }}>
-                                  {enr.child_name ? (
-                                    <div className="d-flex align-items-center gap-1 flex-wrap">
-                                      <span className="fw-semibold text-dark">
-                                        <i className="fas fa-shapes text-primary me-1" style={{ fontSize: '11px' }}></i>
-                                        {enr.child_name}
-                                      </span>
-                                      {enr.child_age && (
-                                        <span className="badge bg-light text-dark border" style={{ fontSize: '11px' }}>
-                                          {enr.child_age}
-                                        </span>
-                                      )}
-                                    </div>
-                                  ) : (
-                                    <span className="text-muted small"><em>Not provided</em></span>
-                                  )}
-                                </td>
-
-                                {/* 4. Phone */}
-                                <td style={{ whiteSpace: 'nowrap' }}>
-                                  {enr.phone ? (
-                                    <a
-                                      href={`tel:${enr.phone}`}
-                                      onClick={(e) => e.stopPropagation()}
-                                      className="text-decoration-none text-dark fw-medium"
-                                      style={{ fontSize: '13px' }}
-                                    >
-                                      <i className="fas fa-phone-alt text-muted me-1" style={{ fontSize: '11px' }}></i>
-                                      {enr.phone}
-                                    </a>
-                                  ) : (
-                                    <span className="text-muted">-</span>
-                                  )}
-                                </td>
-
-                                {/* 5. Email */}
-                                <td style={{ wordBreak: 'break-all' }}>
-                                  <a
-                                    href={`mailto:${enr.email}`}
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="text-decoration-none text-secondary"
-                                    style={{ fontSize: '13px' }}
-                                  >
-                                    {enr.email}
-                                  </a>
-                                </td>
-
-                                {/* 6. Program */}
-                                <td style={{ whiteSpace: 'nowrap' }}>
-                                  <span style={{
-                                    background: enr.dealt ? '#f3f4f6' : '#dcfce7',
-                                    color: enr.dealt ? '#4b5563' : '#15803d',
-                                    padding: '0.25rem 0.65rem',
-                                    borderRadius: '6px',
-                                    fontSize: '12px',
-                                    fontWeight: 600,
-                                    display: 'inline-block'
-                                  }}>
-                                    {enr.preferred_program}
-                                  </span>
-                                </td>
-
-                                {/* 7. Start Date */}
-                                <td style={{ whiteSpace: 'nowrap' }}>
-                                  {enr.preferred_start_date ? (
-                                    <span style={{ fontSize: '12px', fontWeight: 500, color: '#334155' }}>
-                                      <i className="far fa-calendar-alt text-muted me-1"></i>
-                                      {enr.preferred_start_date}
-                                    </span>
-                                  ) : (
-                                    <span className="text-muted small">Flexible</span>
-                                  )}
-                                </td>
-
-                                {/* 8. Message */}
-                                <td style={{ maxWidth: '280px' }}>
-                                  <div className="text-truncate small text-secondary" title={enr.message || 'No notes'}>
-                                    {enr.message || <em className="text-muted">No notes</em>}
-                                  </div>
-                                </td>
-
-                                {/* Actions */}
-                                <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
-                                  <div className="btn-group btn-group-sm">
-                                    <button
-                                      type="button"
-                                      className="btn btn-outline-primary"
-                                      onClick={() => setSelectedEnrollment(enr)}
-                                      title="View enrollment details"
-                                    >
-                                      <i className="fas fa-eye"></i>
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="btn btn-outline-danger"
-                                      onClick={() => requestDeleteEnrollment(enr)}
-                                      title="Delete enrollment"
-                                    >
-                                      <i className="fas fa-trash"></i>
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    /* RESPONSIVE CARDS VIEW FOR ENROLLMENTS */
-                    <div className="row g-3">
+            ) : viewMode === 'table' ? (
+              /* CLEAN MINIMALIST TABLE: ENROLLMENTS */
+              <div className="bg-white rounded-3 border shadow-xs overflow-hidden" style={{ borderColor: '#f1f5f9' }}>
+                <div className="table-responsive">
+                  <table className="table table-hover align-middle mb-0" style={{ minWidth: '1050px', fontSize: '13px' }}>
+                    <thead>
+                      <tr className="bg-light" style={{ borderBottom: '1px solid #e2e8f0' }}>
+                        <th style={{ width: '95px', minWidth: '95px', textAlign: 'center', whiteSpace: 'nowrap' }} onClick={() => handleSort(0)}>
+                          Status <i className="fas fa-sort text-muted ms-1" style={{ fontSize: '10px' }}></i>
+                        </th>
+                        <th style={{ minWidth: '160px', whiteSpace: 'nowrap' }} onClick={() => handleSort(1)}>
+                          Parent / Guardian <i className="fas fa-sort text-muted ms-1" style={{ fontSize: '10px' }}></i>
+                        </th>
+                        <th style={{ minWidth: '150px', whiteSpace: 'nowrap' }} onClick={() => handleSort(2)}>
+                          Child & Age <i className="fas fa-sort text-muted ms-1" style={{ fontSize: '10px' }}></i>
+                        </th>
+                        <th style={{ minWidth: '130px', whiteSpace: 'nowrap' }} onClick={() => handleSort(3)}>
+                          Phone <i className="fas fa-sort text-muted ms-1" style={{ fontSize: '10px' }}></i>
+                        </th>
+                        <th style={{ minWidth: '170px' }} onClick={() => handleSort(4)}>
+                          Email Address <i className="fas fa-sort text-muted ms-1" style={{ fontSize: '10px' }}></i>
+                        </th>
+                        <th style={{ minWidth: '170px', whiteSpace: 'nowrap' }} onClick={() => handleSort(5)}>
+                          Program <i className="fas fa-sort text-muted ms-1" style={{ fontSize: '10px' }}></i>
+                        </th>
+                        <th style={{ minWidth: '110px', whiteSpace: 'nowrap' }} onClick={() => handleSort(6)}>
+                          Start Date <i className="fas fa-sort text-muted ms-1" style={{ fontSize: '10px' }}></i>
+                        </th>
+                        <th style={{ minWidth: '200px' }}>Notes / Message</th>
+                        <th style={{ width: '80px', minWidth: '80px', textAlign: 'center' }}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
                       {sortedEnrollments.length === 0 ? (
-                        <div className="col-12 text-center py-4 text-muted">
-                          No enrollments match your search or filter.
-                        </div>
+                        <tr>
+                          <td colSpan={9} className="text-center py-4 text-muted small">
+                            No enrollments match your filter.
+                          </td>
+                        </tr>
                       ) : (
                         sortedEnrollments.map((enr) => (
-                          <div key={enr.id} className="col-12 col-md-6 col-xl-4">
-                            <div
-                              className="card h-100 border shadow-xs"
-                              style={{
-                                backgroundColor: enr.dealt ? '#f8fafc' : '#ffffff',
-                                borderRadius: '12px'
-                              }}
-                            >
-                              <div className="card-header bg-transparent border-bottom d-flex justify-content-between align-items-center py-2 px-3">
-                                <button
-                                  type="button"
-                                  onClick={() => handleToggleEnrollmentDealt(enr.id, !enr.dealt)}
-                                  className="btn btn-sm"
-                                  style={{
-                                    backgroundColor: enr.dealt ? '#ecfdf5' : '#f1f5f9',
-                                    borderColor: enr.dealt ? '#10b981' : '#cbd5e1',
-                                    color: enr.dealt ? '#047857' : '#475569',
-                                    fontSize: '12px',
-                                    fontWeight: 600,
-                                    padding: '0.2rem 0.6rem',
-                                    borderRadius: '6px'
-                                  }}
-                                >
-                                  <i className={enr.dealt ? 'fas fa-check-circle text-success me-1' : 'far fa-circle text-muted me-1'}></i>
-                                  {enr.dealt ? 'Confirmed' : 'Pending'}
-                                </button>
-                                
-                                <div className="d-flex align-items-center gap-2">
-                                  <span className="badge bg-light text-secondary border font-monospace" style={{ fontSize: '11px' }}>
-                                    {enr.enrollment_number}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    className="btn btn-sm btn-outline-danger border-0 p-1"
-                                    onClick={() => requestDeleteEnrollment(enr)}
-                                    title="Delete enrollment"
-                                  >
-                                    <i className="fas fa-trash-alt"></i>
-                                  </button>
-                                </div>
+                          <tr
+                            key={enr.id}
+                            style={{ cursor: 'pointer', backgroundColor: enr.dealt ? '#fcfdfd' : '#ffffff' }}
+                            onClick={() => setSelectedEnrollment(enr)}
+                          >
+                            {/* Status Toggle */}
+                            <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleEnrollmentDealt(enr.id, !enr.dealt)}
+                                className="btn btn-sm border-0 py-0.5 px-2"
+                                style={{
+                                  backgroundColor: enr.dealt ? '#ecfdf5' : '#fef3c7',
+                                  color: enr.dealt ? '#065f46' : '#92400e',
+                                  fontSize: '11.5px',
+                                  fontWeight: 500,
+                                  borderRadius: '12px'
+                                }}
+                                title="Click to toggle Done / Pending"
+                              >
+                                {enr.dealt ? '✓ Done' : '○ Pending'}
+                              </button>
+                            </td>
+
+                            {/* Parent */}
+                            <td>
+                              <span className="fw-semibold text-dark">{enr.parent_name}</span>
+                              <div className="text-muted font-monospace" style={{ fontSize: '10.5px' }}>
+                                {enr.enrollment_number}
                               </div>
+                            </td>
 
-                              <div className="card-body p-3">
-                                <h6 className="fw-bold text-dark mb-2">
-                                  <i className="fas fa-user-circle text-success me-1.5"></i>
-                                  {enr.parent_name}
-                                </h6>
-
-                                <div className="d-flex align-items-center gap-2 mb-2 flex-wrap">
-                                  <span className="badge bg-success-subtle text-success border border-success-subtle px-2 py-1" style={{ fontSize: '12px' }}>
-                                    <i className="fas fa-shapes me-1"></i>
-                                    Child: {enr.child_name || 'N/A'}
-                                  </span>
+                            {/* Child & Age */}
+                            <td style={{ whiteSpace: 'nowrap' }}>
+                              {enr.child_name ? (
+                                <div className="d-flex align-items-center gap-1">
+                                  <span>{enr.child_name}</span>
                                   {enr.child_age && (
-                                    <span className="badge bg-light text-dark border px-2 py-1" style={{ fontSize: '12px' }}>
-                                      Age: {enr.child_age}
+                                    <span className="badge bg-light text-secondary border fw-normal" style={{ fontSize: '10.5px' }}>
+                                      {enr.child_age}
                                     </span>
                                   )}
                                 </div>
+                              ) : (
+                                <span className="text-muted small">-</span>
+                              )}
+                            </td>
 
-                                <div className="p-2 rounded bg-light mb-2.5 small">
-                                  <div className="d-flex justify-content-between mb-1">
-                                    <span className="text-muted">Program:</span>
-                                    <strong className="text-success">{enr.preferred_program}</strong>
-                                  </div>
-                                  <div className="d-flex justify-content-between">
-                                    <span className="text-muted">Start Date:</span>
-                                    <strong>{enr.preferred_start_date || 'Flexible'}</strong>
-                                  </div>
-                                </div>
+                            {/* Phone */}
+                            <td style={{ whiteSpace: 'nowrap' }}>
+                              {enr.phone ? (
+                                <a 
+                                  href={`tel:${enr.phone}`} 
+                                  onClick={(e) => e.stopPropagation()} 
+                                  className="text-decoration-none text-dark"
+                                >
+                                  {enr.phone}
+                                </a>
+                              ) : (
+                                <span className="text-muted">-</span>
+                              )}
+                            </td>
 
-                                <div className="small mb-2.5">
-                                  {enr.phone && (
-                                    <div className="mb-1">
-                                      <a href={`tel:${enr.phone}`} className="text-decoration-none text-dark fw-medium d-inline-flex align-items-center gap-1">
-                                        <i className="fas fa-phone-alt text-success" style={{ width: '16px' }}></i>
-                                        {enr.phone}
-                                      </a>
-                                    </div>
-                                  )}
-                                  <div>
-                                    <a href={`mailto:${enr.email}`} className="text-decoration-none text-secondary d-inline-flex align-items-center gap-1 text-truncate" style={{ maxWidth: '100%' }}>
-                                      <i className="fas fa-envelope text-primary" style={{ width: '16px' }}></i>
-                                      {enr.email}
-                                    </a>
-                                  </div>
-                                </div>
+                            {/* Email */}
+                            <td style={{ wordBreak: 'break-all' }}>
+                              <a 
+                                href={`mailto:${enr.email}`} 
+                                onClick={(e) => e.stopPropagation()} 
+                                className="text-decoration-none text-secondary"
+                              >
+                                {enr.email}
+                              </a>
+                            </td>
 
-                                {enr.message && (
-                                  <div className="p-2 rounded border bg-light-subtle small text-muted text-truncate" title={enr.message}>
-                                    <i className="fas fa-quote-left text-muted me-1" style={{ opacity: 0.5 }}></i>
-                                    {enr.message}
-                                  </div>
-                                )}
+                            {/* Program */}
+                            <td style={{ whiteSpace: 'nowrap' }}>
+                              <span className="badge bg-light text-dark border fw-normal" style={{ fontSize: '11.5px' }}>
+                                {enr.preferred_program}
+                              </span>
+                            </td>
+
+                            {/* Start Date */}
+                            <td style={{ whiteSpace: 'nowrap', fontSize: '12px' }}>
+                              {enr.preferred_start_date || 'Flexible'}
+                            </td>
+
+                            {/* Message */}
+                            <td style={{ maxWidth: '240px' }}>
+                              <div className="text-truncate text-secondary small" title={enr.message || ''}>
+                                {enr.message || <em className="text-muted">No notes</em>}
                               </div>
+                            </td>
 
-                              <div className="card-footer bg-transparent border-top py-2 px-3 d-flex justify-content-between align-items-center">
-                                <small className="text-muted" style={{ fontSize: '11px' }}>
-                                  <i className="far fa-clock me-1"></i>
-                                  {enr.timestamp}
-                                </small>
+                            {/* Actions */}
+                            <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
+                              <div className="d-flex justify-content-center gap-1">
                                 <button
                                   type="button"
-                                  className="btn btn-outline-success btn-sm py-1 px-2"
-                                  style={{ fontSize: '12px' }}
+                                  className="btn btn-sm btn-light border-0 text-muted p-1"
                                   onClick={() => setSelectedEnrollment(enr)}
+                                  title="View details"
                                 >
-                                  <i className="fas fa-eye me-1"></i>
-                                  Details
+                                  <i className="fas fa-eye" style={{ fontSize: '12px' }}></i>
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-light border-0 text-danger p-1"
+                                  onClick={() => requestDeleteEnrollment(enr)}
+                                  title="Delete"
+                                >
+                                  <i className="fas fa-trash-alt" style={{ fontSize: '12px' }}></i>
                                 </button>
                               </div>
-                            </div>
-                          </div>
+                            </td>
+                          </tr>
                         ))
                       )}
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="text-center py-5">
-                  <i className="fas fa-graduation-cap fa-3x text-muted mb-3" style={{ opacity: 0.5 }}></i>
-                  <h5>No enrollments yet</h5>
-                  <p className="text-muted mb-3">
-                    Submissions from your website enrollment form (using <code>/enroll</code> or <code>/enool</code>) will appear here in real time.
-                  </p>
-                  <div className="d-flex justify-content-center gap-2">
-                    <button
-                      onClick={() => {
-                        setTestModalTab('enrollment');
-                        setShowTestModal(true);
-                      }}
-                      className="btn btn-success btn-sm"
-                    >
-                      <i className="fas fa-paper-plane me-1"></i>
-                      Send Sample Enrollment
-                    </button>
-                    <button
-                      onClick={() => {
-                        setScriptModalTab('enrollment');
-                        setShowScriptModal(true);
-                      }}
-                      className="btn btn-outline-secondary btn-sm"
-                    >
-                      <i className="fas fa-code me-1"></i>
-                      Get /enroll Code
-                    </button>
-                  </div>
+                    </tbody>
+                  </table>
                 </div>
-              )}
-            </div>
+              </div>
+            ) : (
+              /* CLEAN MINIMALIST CARDS: ENROLLMENTS */
+              <div className="row g-2.5">
+                {sortedEnrollments.map((enr) => (
+                  <div key={enr.id} className="col-12 col-md-6 col-xl-4">
+                    <div 
+                      className="bg-white p-3 rounded-3 border shadow-xs h-100 d-flex flex-column justify-content-between"
+                      style={{ borderColor: '#f1f5f9' }}
+                    >
+                      <div>
+                        <div className="d-flex justify-content-between align-items-center mb-2">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleEnrollmentDealt(enr.id, !enr.dealt)}
+                            className="btn btn-sm border-0 py-0.5 px-2"
+                            style={{
+                              backgroundColor: enr.dealt ? '#ecfdf5' : '#fef3c7',
+                              color: enr.dealt ? '#065f46' : '#92400e',
+                              fontSize: '11.5px',
+                              fontWeight: 500,
+                              borderRadius: '12px'
+                            }}
+                          >
+                            {enr.dealt ? '✓ Done' : '○ Pending'}
+                          </button>
+                          <span className="text-muted font-monospace" style={{ fontSize: '11px' }}>
+                            {enr.enrollment_number}
+                          </span>
+                        </div>
+
+                        <h6 className="fw-bold text-dark mb-1">{enr.parent_name}</h6>
+                        
+                        <div className="d-flex align-items-center gap-1 mb-2">
+                          <span className="badge bg-light text-dark border fw-normal" style={{ fontSize: '11px' }}>
+                            Child: {enr.child_name || 'N/A'} {enr.child_age ? `(${enr.child_age})` : ''}
+                          </span>
+                        </div>
+
+                        <div className="small mb-2 text-secondary">
+                          <div className="mb-0.5">
+                            <span className="text-muted">Program:</span> <strong>{enr.preferred_program}</strong>
+                          </div>
+                          <div>
+                            <span className="text-muted">Start:</span> {enr.preferred_start_date || 'Flexible'}
+                          </div>
+                        </div>
+
+                        <div className="small mb-2 text-secondary">
+                          {enr.phone && (
+                            <div>
+                              <a href={`tel:${enr.phone}`} className="text-decoration-none text-dark">
+                                <i className="fas fa-phone-alt me-1 text-muted" style={{ fontSize: '10px' }}></i>
+                                {enr.phone}
+                              </a>
+                            </div>
+                          )}
+                          <div className="text-truncate">
+                            <a href={`mailto:${enr.email}`} className="text-decoration-none text-secondary">
+                              <i className="fas fa-envelope me-1 text-muted" style={{ fontSize: '10px' }}></i>
+                              {enr.email}
+                            </a>
+                          </div>
+                        </div>
+
+                        {enr.message && (
+                          <div className="p-2 rounded bg-light small text-secondary text-truncate mb-2" style={{ fontSize: '12px' }}>
+                            {enr.message}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="d-flex justify-content-between align-items-center pt-2 border-top">
+                        <small className="text-muted" style={{ fontSize: '11px' }}>
+                          {enr.timestamp ? enr.timestamp.slice(5, 16) : ''}
+                        </small>
+                        <div className="d-flex gap-1">
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-light border text-secondary px-2 py-0.5"
+                            style={{ fontSize: '11.5px', borderRadius: '4px' }}
+                            onClick={() => setSelectedEnrollment(enr)}
+                          >
+                            Details
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-light border-0 text-danger p-1"
+                            onClick={() => requestDeleteEnrollment(enr)}
+                          >
+                            <i className="fas fa-trash-alt" style={{ fontSize: '11px' }}></i>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
-      </div>
+      </main>
 
-      {/* Footer */}
-      <footer className="bg-dark text-light mt-5 py-3">
-        <div className="container text-center">
-          <p className="mb-0 small text-muted">
-            <i className="fas fa-shield-alt me-1"></i>
-            Daycare Portal • Inquiries (`/inquiry`) & Enrollments (`/enroll` & `/enool`) • Last synced: {lastUpdated}
-          </p>
-        </div>
+      {/* MINIMALIST FOOTER */}
+      <footer className="py-2.5 border-top bg-white text-center text-muted" style={{ fontSize: '11.5px' }}>
+        <span>Daycare Desk • Endpoints: <code>/inquiry</code> & <code>/enroll</code></span>
       </footer>
 
-      {/* MODAL 1: INQUIRY DETAILS MODAL */}
+      {/* MODAL: INQUIRY DETAILS */}
       {selectedInquiry && (
         <div 
           className="modal fade show d-block" 
           tabIndex={-1} 
-          style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1050 }}
+          style={{ backgroundColor: 'rgba(15, 23, 42, 0.4)', zIndex: 1050 }}
           onClick={() => setSelectedInquiry(null)}
         >
-          <div className="modal-dialog modal-lg modal-dialog-centered" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-content border-0 shadow-lg" style={{ borderRadius: '14px', overflow: 'hidden' }}>
-              <div className="modal-header bg-light">
-                <div>
-                  <h5 className="modal-title font-weight-bold mb-0">
-                    <i className="fas fa-envelope-open-text text-primary me-2"></i>
-                    Inquiry Details: {selectedInquiry.ticket_number}
-                  </h5>
-                  <small className="text-muted">Received on {selectedInquiry.timestamp}</small>
+          <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: '480px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-content border-0 shadow-lg" style={{ borderRadius: '12px' }}>
+              <div className="modal-header border-bottom py-2.5 px-3">
+                <div className="d-flex align-items-center gap-2">
+                  <span className="fw-semibold fs-6">Inquiry Details</span>
+                  <span className="badge bg-light text-secondary border font-monospace" style={{ fontSize: '10.5px' }}>
+                    {selectedInquiry.ticket_number}
+                  </span>
                 </div>
                 <button type="button" className="btn-close" onClick={() => setSelectedInquiry(null)}></button>
               </div>
 
-              <div className="modal-body p-4">
-                {/* Dealt / Tick Status Banner */}
-                <div 
-                  className={`p-3 rounded-3 mb-4 d-flex justify-content-between align-items-center flex-wrap gap-2 ${
-                    selectedInquiry.dealt ? 'bg-success-subtle border border-success' : 'bg-warning-subtle border border-warning'
-                  }`}
-                >
-                  <div className="d-flex align-items-center gap-2">
-                    <i className={`fas ${selectedInquiry.dealt ? 'fa-check-circle text-success' : 'fa-clock text-warning'} fs-4`}></i>
-                    <div>
-                      <strong className={selectedInquiry.dealt ? 'text-success' : 'text-dark'}>
-                        {selectedInquiry.dealt ? 'This inquiry has been dealt with' : 'Pending: Needs Response'}
-                      </strong>
-                      <div className="small text-muted">
-                        {selectedInquiry.dealt ? 'Marked as dealt with by staff.' : 'Click to tick once you have called or replied to this person.'}
-                      </div>
-                    </div>
-                  </div>
+              <div className="modal-body p-3">
+                <div className="d-flex justify-content-between align-items-center mb-3 p-2 rounded bg-light">
+                  <span className="small text-secondary">
+                    Status: <strong>{selectedInquiry.dealt ? 'Resolved' : 'Pending'}</strong>
+                  </span>
                   <button
                     type="button"
-                    className={`btn btn-sm ${selectedInquiry.dealt ? 'btn-outline-secondary' : 'btn-success'}`}
+                    className="btn btn-sm btn-white border px-2 py-0.5"
+                    style={{ fontSize: '12px' }}
                     onClick={() => handleToggleInquiryDealt(selectedInquiry.id, !selectedInquiry.dealt)}
                   >
-                    <i className={`fas ${selectedInquiry.dealt ? 'fa-undo' : 'fa-check'} me-1`}></i>
-                    {selectedInquiry.dealt ? 'Mark as Pending' : 'Tick as Dealt With'}
+                    {selectedInquiry.dealt ? 'Mark Pending' : 'Mark as Done ✓'}
                   </button>
                 </div>
 
-                {/* 5 Core Parameters Card */}
-                <div className="card mb-3 border">
-                  <div className="card-header bg-light py-2">
-                    <strong className="small text-uppercase text-secondary">
-                      <i className="fas fa-list-ol me-1 text-primary"></i>
-                      5 Inquiry Parameters
-                    </strong>
+                <div className="mb-2.5">
+                  <span className="text-muted d-block" style={{ fontSize: '11px' }}>Your name</span>
+                  <strong className="fs-6 text-dark">{selectedInquiry.your_name}</strong>
+                </div>
+
+                <div className="row g-2 mb-2.5">
+                  <div className="col-6">
+                    <span className="text-muted d-block" style={{ fontSize: '11px' }}>Phone number</span>
+                    {selectedInquiry.phone ? (
+                      <a href={`tel:${selectedInquiry.phone}`} className="text-decoration-none fw-medium text-dark">
+                        {selectedInquiry.phone}
+                      </a>
+                    ) : (
+                      <span className="text-muted small">-</span>
+                    )}
                   </div>
-                  <div className="card-body">
-                    <div className="row g-3">
-                      {/* 1. Your name */}
-                      <div className="col-md-4">
-                        <label className="text-muted small d-block">1. Your name</label>
-                        <span className="fw-bold fs-6">{selectedInquiry.your_name}</span>
-                      </div>
-
-                      {/* 2. Phone number */}
-                      <div className="col-md-4">
-                        <label className="text-muted small d-block">2. Phone number</label>
-                        {selectedInquiry.phone ? (
-                          <a href={`tel:${selectedInquiry.phone}`} className="fw-bold fs-6 text-decoration-none">
-                            <i className="fas fa-phone-alt me-1 text-muted small"></i>
-                            {selectedInquiry.phone}
-                          </a>
-                        ) : (
-                          <span className="text-muted">Not provided</span>
-                        )}
-                      </div>
-
-                      {/* 3. Email address */}
-                      <div className="col-md-4">
-                        <label className="text-muted small d-block">3. Email address</label>
-                        <a href={`mailto:${selectedInquiry.email}`} className="fw-bold fs-6 text-decoration-none">
-                          <i className="fas fa-envelope me-1 text-muted small"></i>
-                          {selectedInquiry.email}
-                        </a>
-                      </div>
-
-                      {/* 4. What can we help with? */}
-                      <div className="col-12">
-                        <label className="text-muted small d-block">4. What can we help with?</label>
-                        <span className="badge bg-primary fs-6 px-3 py-2 fw-semibold">
-                          {selectedInquiry.what_can_we_help_with}
-                        </span>
-                      </div>
-
-                      {/* 5. Your message */}
-                      <div className="col-12">
-                        <label className="text-muted small d-block">5. Your message</label>
-                        <div className="p-3 bg-light rounded-3 border">
-                          <p className="mb-0 text-dark" style={{ whiteSpace: 'pre-wrap' }}>
-                            {selectedInquiry.your_message || <em className="text-muted">No message provided.</em>}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
+                  <div className="col-6">
+                    <span className="text-muted d-block" style={{ fontSize: '11px' }}>Email address</span>
+                    <a href={`mailto:${selectedInquiry.email}`} className="text-decoration-none fw-medium text-dark text-truncate d-block">
+                      {selectedInquiry.email}
+                    </a>
                   </div>
+                </div>
+
+                <div className="mb-2.5">
+                  <span className="text-muted d-block" style={{ fontSize: '11px' }}>What can we help with?</span>
+                  <span className="badge bg-light text-dark border fw-normal" style={{ fontSize: '12px' }}>
+                    {selectedInquiry.what_can_we_help_with}
+                  </span>
+                </div>
+
+                <div className="mb-2.5">
+                  <span className="text-muted d-block" style={{ fontSize: '11px' }}>Your message</span>
+                  <div className="p-2.5 rounded bg-light border small text-dark" style={{ whiteSpace: 'pre-wrap' }}>
+                    {selectedInquiry.your_message || <em className="text-muted">No message provided.</em>}
+                  </div>
+                </div>
+
+                {/* Move to Enrollments button */}
+                <div className="pt-2 border-top d-flex justify-content-between align-items-center">
+                  <span className="text-muted small" style={{ fontSize: '11px' }}>Wrong section?</span>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-secondary py-1 px-2"
+                    style={{ fontSize: '11.5px' }}
+                    onClick={() => handleMoveInquiryToEnrollment(selectedInquiry)}
+                  >
+                    <i className="fas fa-arrow-right me-1"></i> Move to Enrollments
+                  </button>
                 </div>
               </div>
 
-              <div className="modal-footer bg-light d-flex justify-content-between">
-                <div>
+              <div className="modal-footer border-top py-2 px-3 d-flex justify-content-between">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-link text-danger text-decoration-none p-0"
+                  onClick={() => requestDeleteInquiry(selectedInquiry)}
+                >
+                  <i className="fas fa-trash-alt me-1"></i> Delete
+                </button>
+                <div className="d-flex gap-1.5">
                   {selectedInquiry.phone && (
-                    <a href={`tel:${selectedInquiry.phone}`} className="btn btn-outline-success btn-sm me-2">
-                      <i className="fas fa-phone me-1"></i>
+                    <a href={`tel:${selectedInquiry.phone}`} className="btn btn-sm btn-outline-success px-2.5 py-1">
                       Call
                     </a>
                   )}
-                  <a href={`mailto:${selectedInquiry.email}`} className="btn btn-primary btn-sm me-2">
-                    <i className="fas fa-envelope me-1"></i>
-                    Email Reply
+                  <a href={`mailto:${selectedInquiry.email}`} className="btn btn-sm btn-dark px-2.5 py-1">
+                    Email
                   </a>
-                </div>
-                <div className="d-flex gap-2">
-                  <button
-                    type="button"
-                    className="btn btn-outline-danger btn-sm"
-                    onClick={() => {
-                      requestDeleteInquiry(selectedInquiry);
-                    }}
-                  >
-                    <i className="fas fa-trash me-1"></i>
-                    Delete
-                  </button>
-                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => setSelectedInquiry(null)}>
-                    Close
-                  </button>
                 </div>
               </div>
             </div>
@@ -1857,168 +1482,125 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL 2: ENROLLMENT DETAILS MODAL */}
+      {/* MODAL: ENROLLMENT DETAILS */}
       {selectedEnrollment && (
         <div 
           className="modal fade show d-block" 
           tabIndex={-1} 
-          style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1050 }}
+          style={{ backgroundColor: 'rgba(15, 23, 42, 0.4)', zIndex: 1050 }}
           onClick={() => setSelectedEnrollment(null)}
         >
-          <div className="modal-dialog modal-lg modal-dialog-centered" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-content border-0 shadow-lg" style={{ borderRadius: '14px', overflow: 'hidden' }}>
-              <div className="modal-header bg-light">
-                <div>
-                  <h5 className="modal-title font-weight-bold mb-0">
-                    <i className="fas fa-user-graduate text-success me-2"></i>
-                    Enrollment Registration: {selectedEnrollment.enrollment_number}
-                  </h5>
-                  <small className="text-muted">Received on {selectedEnrollment.timestamp}</small>
+          <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: '480px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-content border-0 shadow-lg" style={{ borderRadius: '12px' }}>
+              <div className="modal-header border-bottom py-2.5 px-3">
+                <div className="d-flex align-items-center gap-2">
+                  <span className="fw-semibold fs-6">Enrollment Details</span>
+                  <span className="badge bg-light text-secondary border font-monospace" style={{ fontSize: '10.5px' }}>
+                    {selectedEnrollment.enrollment_number}
+                  </span>
                 </div>
                 <button type="button" className="btn-close" onClick={() => setSelectedEnrollment(null)}></button>
               </div>
 
-              <div className="modal-body p-4">
-                {/* Dealt / Status Banner */}
-                <div 
-                  className={`p-3 rounded-3 mb-4 d-flex justify-content-between align-items-center flex-wrap gap-2 ${
-                    selectedEnrollment.dealt ? 'bg-success-subtle border border-success' : 'bg-warning-subtle border border-warning'
-                  }`}
-                >
-                  <div className="d-flex align-items-center gap-2">
-                    <i className={`fas ${selectedEnrollment.dealt ? 'fa-check-circle text-success' : 'fa-clock text-warning'} fs-4`}></i>
-                    <div>
-                      <strong className={selectedEnrollment.dealt ? 'text-success' : 'text-dark'}>
-                        {selectedEnrollment.dealt ? 'Enrollment Confirmed / Processed' : 'Pending: Awaiting Admission Review'}
-                      </strong>
-                      <div className="small text-muted">
-                        {selectedEnrollment.dealt ? 'Registration confirmed in daycare records.' : 'Click to tick once the child is registered.'}
-                      </div>
-                    </div>
-                  </div>
+              <div className="modal-body p-3">
+                <div className="d-flex justify-content-between align-items-center mb-3 p-2 rounded bg-light">
+                  <span className="small text-secondary">
+                    Status: <strong>{selectedEnrollment.dealt ? 'Confirmed' : 'Pending'}</strong>
+                  </span>
                   <button
                     type="button"
-                    className={`btn btn-sm ${selectedEnrollment.dealt ? 'btn-outline-secondary' : 'btn-success'}`}
+                    className="btn btn-sm btn-white border px-2 py-0.5"
+                    style={{ fontSize: '12px' }}
                     onClick={() => handleToggleEnrollmentDealt(selectedEnrollment.id, !selectedEnrollment.dealt)}
                   >
-                    <i className={`fas ${selectedEnrollment.dealt ? 'fa-undo' : 'fa-check'} me-1`}></i>
-                    {selectedEnrollment.dealt ? 'Mark as Pending' : 'Confirm Enrollment'}
+                    {selectedEnrollment.dealt ? 'Mark Pending' : 'Mark Confirmed ✓'}
                   </button>
                 </div>
 
-                {/* Parent & Child info cards */}
-                <div className="row g-3 mb-3">
-                  <div className="col-md-6">
-                    <div className="card h-100 border">
-                      <div className="card-header bg-light py-2">
-                        <strong className="small text-uppercase text-secondary">
-                          <i className="fas fa-user-friends me-1 text-primary"></i>
-                          Parent or Guardian
-                        </strong>
-                      </div>
-                      <div className="card-body">
-                        <div className="mb-2">
-                          <label className="text-muted small d-block">Parent Name</label>
-                          <span className="fw-bold fs-6">{selectedEnrollment.parent_name}</span>
-                        </div>
-                        <div className="mb-2">
-                          <label className="text-muted small d-block">Phone Number</label>
-                          {selectedEnrollment.phone ? (
-                            <a href={`tel:${selectedEnrollment.phone}`} className="fw-bold fs-6 text-decoration-none">
-                              {selectedEnrollment.phone}
-                            </a>
-                          ) : (
-                            <span className="text-muted">Not provided</span>
-                          )}
-                        </div>
-                        <div>
-                          <label className="text-muted small d-block">Email Address</label>
-                          <a href={`mailto:${selectedEnrollment.email}`} className="fw-bold fs-6 text-decoration-none">
-                            {selectedEnrollment.email}
-                          </a>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                <div className="mb-2.5">
+                  <span className="text-muted d-block" style={{ fontSize: '11px' }}>Parent / Guardian</span>
+                  <strong className="fs-6 text-dark">{selectedEnrollment.parent_name}</strong>
+                </div>
 
-                  <div className="col-md-6">
-                    <div className="card h-100 border">
-                      <div className="card-header bg-light py-2">
-                        <strong className="small text-uppercase text-secondary">
-                          <i className="fas fa-baby me-1 text-info"></i>
-                          Child’s Information
-                        </strong>
-                      </div>
-                      <div className="card-body">
-                        <div className="mb-2">
-                          <label className="text-muted small d-block">Child’s Name</label>
-                          <span className="fw-bold fs-6 text-dark">{selectedEnrollment.child_name || 'Not provided'}</span>
-                        </div>
-                        <div className="mb-2">
-                          <label className="text-muted small d-block">Child’s Age</label>
-                          <span className="badge bg-info-subtle text-info-emphasis border border-info-subtle fs-6">
-                            {selectedEnrollment.child_age || 'Not provided'}
-                          </span>
-                        </div>
-                        <div>
-                          <label className="text-muted small d-block">Preferred Program</label>
-                          <span className="badge bg-success fs-6">
-                            {selectedEnrollment.preferred_program}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
+                <div className="row g-2 mb-2.5">
+                  <div className="col-6">
+                    <span className="text-muted d-block" style={{ fontSize: '11px' }}>Child Name</span>
+                    <strong className="text-dark">{selectedEnrollment.child_name || '-'}</strong>
+                  </div>
+                  <div className="col-6">
+                    <span className="text-muted d-block" style={{ fontSize: '11px' }}>Child Age</span>
+                    <span>{selectedEnrollment.child_age || '-'}</span>
                   </div>
                 </div>
 
-                {/* Start Date & Special Notes */}
-                <div className="card border">
-                  <div className="card-header bg-light py-2">
-                    <strong className="small text-uppercase text-secondary">
-                      <i className="far fa-calendar-alt me-1 text-warning"></i>
-                      Start Date & Notes
-                    </strong>
+                <div className="row g-2 mb-2.5">
+                  <div className="col-6">
+                    <span className="text-muted d-block" style={{ fontSize: '11px' }}>Phone</span>
+                    {selectedEnrollment.phone ? (
+                      <a href={`tel:${selectedEnrollment.phone}`} className="text-decoration-none text-dark">
+                        {selectedEnrollment.phone}
+                      </a>
+                    ) : (
+                      <span className="text-muted">-</span>
+                    )}
                   </div>
-                  <div className="card-body">
-                    <div className="mb-3">
-                      <label className="text-muted small d-block">Preferred Start Date</label>
-                      <span className="fw-bold">{selectedEnrollment.preferred_start_date || 'Flexible'}</span>
-                    </div>
-                    <div>
-                      <label className="text-muted small d-block">Notes / Special Requirements / Message</label>
-                      <div className="p-3 bg-light rounded border">
-                        {selectedEnrollment.message || <em className="text-muted">No notes provided.</em>}
-                      </div>
-                    </div>
+                  <div className="col-6">
+                    <span className="text-muted d-block" style={{ fontSize: '11px' }}>Email</span>
+                    <a href={`mailto:${selectedEnrollment.email}`} className="text-decoration-none text-dark text-truncate d-block">
+                      {selectedEnrollment.email}
+                    </a>
                   </div>
+                </div>
+
+                <div className="row g-2 mb-2.5">
+                  <div className="col-6">
+                    <span className="text-muted d-block" style={{ fontSize: '11px' }}>Program</span>
+                    <span className="badge bg-light text-dark border fw-normal">{selectedEnrollment.preferred_program}</span>
+                  </div>
+                  <div className="col-6">
+                    <span className="text-muted d-block" style={{ fontSize: '11px' }}>Start Date</span>
+                    <span>{selectedEnrollment.preferred_start_date || 'Flexible'}</span>
+                  </div>
+                </div>
+
+                <div className="mb-2.5">
+                  <span className="text-muted d-block" style={{ fontSize: '11px' }}>Notes / Message</span>
+                  <div className="p-2 rounded bg-light border small text-dark">
+                    {selectedEnrollment.message || <em className="text-muted">No notes</em>}
+                  </div>
+                </div>
+
+                {/* Move to Inquiries button */}
+                <div className="pt-2 border-top d-flex justify-content-between align-items-center">
+                  <span className="text-muted small" style={{ fontSize: '11px' }}>General question instead?</span>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-secondary py-1 px-2"
+                    style={{ fontSize: '11.5px' }}
+                    onClick={() => handleMoveEnrollmentToInquiry(selectedEnrollment)}
+                  >
+                    <i className="fas fa-arrow-left me-1"></i> Move to Inquiries
+                  </button>
                 </div>
               </div>
 
-              <div className="modal-footer bg-light d-flex justify-content-between">
-                <div>
+              <div className="modal-footer border-top py-2 px-3 d-flex justify-content-between">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-link text-danger text-decoration-none p-0"
+                  onClick={() => requestDeleteEnrollment(selectedEnrollment)}
+                >
+                  <i className="fas fa-trash-alt me-1"></i> Delete
+                </button>
+                <div className="d-flex gap-1.5">
                   {selectedEnrollment.phone && (
-                    <a href={`tel:${selectedEnrollment.phone}`} className="btn btn-outline-success btn-sm me-2">
-                      <i className="fas fa-phone me-1"></i>
-                      Call Parent
+                    <a href={`tel:${selectedEnrollment.phone}`} className="btn btn-sm btn-outline-success px-2.5 py-1">
+                      Call
                     </a>
                   )}
-                  <a href={`mailto:${selectedEnrollment.email}`} className="btn btn-success btn-sm me-2">
-                    <i className="fas fa-envelope me-1"></i>
-                    Email Parent
+                  <a href={`mailto:${selectedEnrollment.email}`} className="btn btn-sm btn-dark px-2.5 py-1">
+                    Email
                   </a>
-                </div>
-                <div className="d-flex gap-2">
-                  <button
-                    type="button"
-                    className="btn btn-outline-danger btn-sm"
-                    onClick={() => requestDeleteEnrollment(selectedEnrollment)}
-                  >
-                    <i className="fas fa-trash me-1"></i>
-                    Delete
-                  </button>
-                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => setSelectedEnrollment(null)}>
-                    Close
-                  </button>
                 </div>
               </div>
             </div>
@@ -2026,229 +1608,192 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL 3: TEST FORM SIMULATOR */}
+      {/* MODAL: TEST FORM SIMULATOR */}
       {showTestModal && (
         <div 
           className="modal fade show d-block" 
           tabIndex={-1} 
-          style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1050 }}
+          style={{ backgroundColor: 'rgba(15, 23, 42, 0.4)', zIndex: 1050 }}
           onClick={() => setShowTestModal(false)}
         >
-          <div className="modal-dialog modal-lg modal-dialog-centered" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-content border-0 shadow-lg" style={{ borderRadius: '14px', overflow: 'hidden' }}>
-              <div className="modal-header bg-light">
-                <h5 className="modal-title fw-bold">
-                  <i className="fas fa-paper-plane text-primary me-2"></i>
-                  Submit a Test Form
-                </h5>
+          <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: '520px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-content border-0 shadow-lg" style={{ borderRadius: '12px' }}>
+              <div className="modal-header border-bottom py-2.5 px-3">
+                <span className="fw-semibold fs-6">Submit Test Form</span>
                 <button type="button" className="btn-close" onClick={() => setShowTestModal(false)}></button>
               </div>
 
-              {/* Tabs inside Test modal */}
-              <div className="px-4 pt-3 border-bottom bg-light-subtle d-flex gap-2">
+              <div className="px-3 pt-2 pb-1 border-bottom bg-light d-flex gap-1.5">
                 <button
                   type="button"
-                  className={`btn btn-sm ${testModalTab === 'inquiry' ? 'btn-primary' : 'btn-outline-secondary'}`}
+                  className={`btn btn-sm ${testModalTab === 'inquiry' ? 'btn-white shadow-xs fw-medium text-dark' : 'btn-link text-secondary text-decoration-none'}`}
+                  style={{ fontSize: '12px' }}
                   onClick={() => setTestModalTab('inquiry')}
                 >
-                  <i className="fas fa-comments me-1"></i>
-                  Test Inquiry (`/inquiry`)
+                  Inquiry (/inquiry)
                 </button>
                 <button
                   type="button"
-                  className={`btn btn-sm ${testModalTab === 'enrollment' ? 'btn-success' : 'btn-outline-secondary'}`}
+                  className={`btn btn-sm ${testModalTab === 'enrollment' ? 'btn-white shadow-xs fw-medium text-dark' : 'btn-link text-secondary text-decoration-none'}`}
+                  style={{ fontSize: '12px' }}
                   onClick={() => setTestModalTab('enrollment')}
                 >
-                  <i className="fas fa-baby me-1"></i>
-                  Test Enrollment (`/enroll` & `/enool`)
+                  Enrollment (/enroll)
                 </button>
               </div>
 
-              <div className="modal-body p-4">
+              <div className="modal-body p-3">
                 {testModalTab === 'inquiry' ? (
-                  /* INQUIRY TEST FORM (5 parameters) */
                   <form onSubmit={handleSendTestInquiry}>
-                    <div className="alert alert-info py-2 px-3 small mb-3">
-                      <strong>Endpoint: <code>/inquiry</code></strong> with the 5 parameters you specified:
-                      <br /><code>Your name</code>, <code>Phone number</code>, <code>Email address</code>, <code>What can we help with?</code>, <code>Your message</code>
-                    </div>
-
-                    <div className="row g-3">
-                      <div className="col-md-6">
-                        <label className="form-label fw-semibold small">Your name</label>
+                    <div className="row g-2 mb-2">
+                      <div className="col-12">
+                        <label className="text-muted small d-block mb-1">Your name</label>
                         <input
                           type="text"
-                          className="form-control"
+                          className="form-control form-control-sm"
                           required
                           value={testInqName}
                           onChange={(e) => setTestInqName(e.target.value)}
                         />
                       </div>
-                      <div className="col-md-6">
-                        <label className="form-label fw-semibold small">Phone number</label>
+                      <div className="col-6">
+                        <label className="text-muted small d-block mb-1">Phone number</label>
                         <input
                           type="tel"
-                          className="form-control"
+                          className="form-control form-control-sm"
                           value={testInqPhone}
                           onChange={(e) => setTestInqPhone(e.target.value)}
                         />
                       </div>
-                      <div className="col-md-6">
-                        <label className="form-label fw-semibold small">Email address</label>
+                      <div className="col-6">
+                        <label className="text-muted small d-block mb-1">Email address</label>
                         <input
                           type="email"
-                          className="form-control"
+                          className="form-control form-control-sm"
                           required
                           value={testInqEmail}
                           onChange={(e) => setTestInqEmail(e.target.value)}
                         />
                       </div>
-                      <div className="col-md-6">
-                        <label className="form-label fw-semibold small">What can we help with?</label>
+                      <div className="col-12">
+                        <label className="text-muted small d-block mb-1">What can we help with?</label>
                         <select
-                          className="form-select"
+                          className="form-select form-select-sm"
                           value={testInqHelpWith}
                           onChange={(e) => setTestInqHelpWith(e.target.value)}
                         >
                           <option value="Schedule a Campus Tour">Schedule a Campus Tour</option>
                           <option value="Tuition & Fee Structure">Tuition & Fee Structure</option>
                           <option value="Infant Program Availability">Infant Program Availability</option>
-                          <option value="Toddler Program Inquiries">Toddler Program Inquiries</option>
                           <option value="General Question">General Question</option>
                         </select>
                       </div>
                       <div className="col-12">
-                        <label className="form-label fw-semibold small">Your message</label>
+                        <label className="text-muted small d-block mb-1">Your message</label>
                         <textarea
-                          className="form-control"
-                          rows={3}
+                          className="form-control form-control-sm"
+                          rows={2}
                           value={testInqMessage}
                           onChange={(e) => setTestInqMessage(e.target.value)}
                         ></textarea>
                       </div>
                     </div>
-
-                    <div className="mt-4 d-flex justify-content-end gap-2">
-                      <button type="button" className="btn btn-secondary" onClick={() => setShowTestModal(false)}>
+                    <div className="d-flex justify-content-end gap-1.5 pt-2">
+                      <button type="button" className="btn btn-sm btn-light border" onClick={() => setShowTestModal(false)}>
                         Cancel
                       </button>
-                      <button type="submit" className="btn btn-primary" disabled={testInqSending}>
-                        <i className={`fas ${testInqSending ? 'fa-spinner fa-spin' : 'fa-paper-plane'} me-1`}></i>
-                        Send Test Inquiry to /inquiry
+                      <button type="submit" className="btn btn-sm btn-dark" disabled={testInqSending}>
+                        {testInqSending ? 'Sending...' : 'Send to /inquiry'}
                       </button>
                     </div>
                   </form>
                 ) : (
-                  /* ENROLLMENT TEST FORM (/enroll & /enool) */
                   <form onSubmit={handleSendTestEnrollment}>
-                    <div className="alert alert-success py-2 px-3 small mb-3">
-                      <strong>Choose Endpoint:</strong> You can send to either <code>/enroll</code> or <code>/enool</code>:
-                      <div className="btn-group btn-group-sm mt-1 d-block">
-                        <button
-                          type="button"
-                          className={`btn ${testEnrEndpoint === '/enroll' ? 'btn-success' : 'btn-outline-success'}`}
-                          onClick={() => setTestEnrEndpoint('/enroll')}
-                        >
-                          Send to /enroll
-                        </button>
-                        <button
-                          type="button"
-                          className={`btn ${testEnrEndpoint === '/enool' ? 'btn-success' : 'btn-outline-success'}`}
-                          onClick={() => setTestEnrEndpoint('/enool')}
-                        >
-                          Send to /enool
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="row g-3">
-                      <div className="col-md-6">
-                        <label className="form-label fw-semibold small">Parent or guardian name</label>
+                    <div className="row g-2 mb-2">
+                      <div className="col-12">
+                        <label className="text-muted small d-block mb-1">Parent or guardian name</label>
                         <input
                           type="text"
-                          className="form-control"
+                          className="form-control form-control-sm"
                           required
                           value={testEnrParent}
                           onChange={(e) => setTestEnrParent(e.target.value)}
                         />
                       </div>
-                      <div className="col-md-6">
-                        <label className="form-label fw-semibold small">Phone number</label>
+                      <div className="col-6">
+                        <label className="text-muted small d-block mb-1">Child's name</label>
+                        <input
+                          type="text"
+                          className="form-control form-control-sm"
+                          value={testEnrChild}
+                          onChange={(e) => setTestEnrChild(e.target.value)}
+                        />
+                      </div>
+                      <div className="col-6">
+                        <label className="text-muted small d-block mb-1">Child's age</label>
+                        <input
+                          type="text"
+                          className="form-control form-control-sm"
+                          value={testEnrAge}
+                          onChange={(e) => setTestEnrAge(e.target.value)}
+                        />
+                      </div>
+                      <div className="col-6">
+                        <label className="text-muted small d-block mb-1">Phone</label>
                         <input
                           type="tel"
-                          className="form-control"
+                          className="form-control form-control-sm"
                           value={testEnrPhone}
                           onChange={(e) => setTestEnrPhone(e.target.value)}
                         />
                       </div>
-                      <div className="col-md-6">
-                        <label className="form-label fw-semibold small">Email address</label>
+                      <div className="col-6">
+                        <label className="text-muted small d-block mb-1">Email</label>
                         <input
                           type="email"
-                          className="form-control"
+                          className="form-control form-control-sm"
                           required
                           value={testEnrEmail}
                           onChange={(e) => setTestEnrEmail(e.target.value)}
                         />
                       </div>
-                      <div className="col-md-6">
-                        <label className="form-label fw-semibold small">Child's name</label>
-                        <input
-                          type="text"
-                          className="form-control"
-                          value={testEnrChild}
-                          onChange={(e) => setTestEnrChild(e.target.value)}
-                        />
-                      </div>
-                      <div className="col-md-4">
-                        <label className="form-label fw-semibold small">Child's age</label>
-                        <input
-                          type="text"
-                          className="form-control"
-                          value={testEnrAge}
-                          onChange={(e) => setTestEnrAge(e.target.value)}
-                        />
-                      </div>
-                      <div className="col-md-4">
-                        <label className="form-label fw-semibold small">Preferred program</label>
+                      <div className="col-6">
+                        <label className="text-muted small d-block mb-1">Program</label>
                         <select
-                          className="form-select"
+                          className="form-select form-select-sm"
                           value={testEnrProgram}
                           onChange={(e) => setTestEnrProgram(e.target.value)}
                         >
                           <option value="Toddler Program (Full-Day)">Toddler Program (Full-Day)</option>
                           <option value="Infant Care (0 - 18 mos)">Infant Care (0 - 18 mos)</option>
                           <option value="Pre-K Early Learning">Pre-K Early Learning</option>
-                          <option value="Before & After School Care">Before & After School Care</option>
                         </select>
                       </div>
-                      <div className="col-md-4">
-                        <label className="form-label fw-semibold small">Preferred start date</label>
+                      <div className="col-6">
+                        <label className="text-muted small d-block mb-1">Start Date</label>
                         <input
                           type="date"
-                          className="form-control"
+                          className="form-control form-control-sm"
                           value={testEnrDate}
                           onChange={(e) => setTestEnrDate(e.target.value)}
                         />
                       </div>
                       <div className="col-12">
-                        <label className="form-label fw-semibold small">Your message / Special notes</label>
+                        <label className="text-muted small d-block mb-1">Notes / Special requirements</label>
                         <textarea
-                          className="form-control"
+                          className="form-control form-control-sm"
                           rows={2}
                           value={testEnrNotes}
                           onChange={(e) => setTestEnrNotes(e.target.value)}
                         ></textarea>
                       </div>
                     </div>
-
-                    <div className="mt-4 d-flex justify-content-end gap-2">
-                      <button type="button" className="btn btn-secondary" onClick={() => setShowTestModal(false)}>
+                    <div className="d-flex justify-content-end gap-1.5 pt-2">
+                      <button type="button" className="btn btn-sm btn-light border" onClick={() => setShowTestModal(false)}>
                         Cancel
                       </button>
-                      <button type="submit" className="btn btn-success" disabled={testEnrSending}>
-                        <i className={`fas ${testEnrSending ? 'fa-spinner fa-spin' : 'fa-paper-plane'} me-1`}></i>
-                        Send Test Enrollment to {testEnrEndpoint}
+                      <button type="submit" className="btn btn-sm btn-dark" disabled={testEnrSending}>
+                        {testEnrSending ? 'Sending...' : 'Send to /enroll'}
                       </button>
                     </div>
                   </form>
@@ -2259,122 +1804,85 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL 4: WEBSITE CODE MODAL */}
+      {/* MODAL: WEBSITE EMBED CODE */}
       {showScriptModal && (
         <div 
           className="modal fade show d-block" 
           tabIndex={-1} 
-          style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1050 }}
+          style={{ backgroundColor: 'rgba(15, 23, 42, 0.4)', zIndex: 1050 }}
           onClick={() => setShowScriptModal(false)}
         >
-          <div className="modal-dialog modal-lg modal-dialog-centered" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-content border-0 shadow-lg" style={{ borderRadius: '14px', overflow: 'hidden' }}>
-              <div className="modal-header bg-light">
-                <h5 className="modal-title fw-bold">
-                  <i className="fas fa-code text-primary me-2"></i>
-                  Website Integration Code
-                </h5>
+          <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: '540px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-content border-0 shadow-lg" style={{ borderRadius: '12px' }}>
+              <div className="modal-header border-bottom py-2.5 px-3">
+                <span className="fw-semibold fs-6">Website Form Endpoints</span>
                 <button type="button" className="btn-close" onClick={() => setShowScriptModal(false)}></button>
               </div>
 
-              {/* Tabs for code snippet */}
-              <div className="px-4 pt-3 border-bottom bg-light-subtle d-flex gap-2">
+              <div className="px-3 pt-2 pb-1 border-bottom bg-light d-flex gap-1.5">
                 <button
                   type="button"
-                  className={`btn btn-sm ${scriptModalTab === 'inquiry' ? 'btn-primary' : 'btn-outline-secondary'}`}
+                  className={`btn btn-sm ${scriptModalTab === 'inquiry' ? 'btn-white shadow-xs fw-medium text-dark' : 'btn-link text-secondary text-decoration-none'}`}
+                  style={{ fontSize: '12px' }}
                   onClick={() => setScriptModalTab('inquiry')}
                 >
-                  <i className="fas fa-comments me-1"></i>
-                  Inquiry Form Code (`/inquiry`)
+                  Inquiry (/inquiry)
                 </button>
                 <button
                   type="button"
-                  className={`btn btn-sm ${scriptModalTab === 'enrollment' ? 'btn-success' : 'btn-outline-secondary'}`}
+                  className={`btn btn-sm ${scriptModalTab === 'enrollment' ? 'btn-white shadow-xs fw-medium text-dark' : 'btn-link text-secondary text-decoration-none'}`}
+                  style={{ fontSize: '12px' }}
                   onClick={() => setScriptModalTab('enrollment')}
                 >
-                  <i className="fas fa-baby me-1"></i>
-                  Enrollment Form Code (`/enroll` & `/enool`)
+                  Enrollment (/enroll)
                 </button>
               </div>
 
-              <div className="modal-body p-4">
+              <div className="modal-body p-3">
                 {scriptModalTab === 'inquiry' ? (
                   <>
-                    <h6 className="fw-bold text-dark">
-                      1. Inquiries Endpoint: <code>/inquiry</code>
-                    </h6>
                     <p className="text-secondary small mb-2">
-                      Send submissions from your contact or inquiry form with these exact 5 parameters:
+                      Send your website's contact form to <code>/inquiry</code> with these 5 parameters:
                     </p>
-                    <div className="bg-light p-2 rounded mb-3 small font-monospace">
-                      1. Your name<br />
-                      2. Phone number<br />
-                      3. Email address<br />
-                      4. What can we help with?<br />
-                      5. Your message
-                    </div>
-
-                    <h6 className="fw-semibold small text-muted">HTML / JavaScript Snippet for your website:</h6>
-                    <pre className="bg-dark text-light p-3 rounded" style={{ fontSize: '12px', maxHeight: '250px', overflowY: 'auto' }}>
-{`// Example: Sending from your website inquiry form to /inquiry
-const inquiryData = new URLSearchParams({
-  'Your name': document.getElementById('your_name').value,
-  'Phone number': document.getElementById('phone_number').value,
-  'Email address': document.getElementById('email_address').value,
-  'What can we help with?': document.getElementById('help_topic').value,
-  'Your message': document.getElementById('your_message').value
+                    <pre className="p-2.5 rounded bg-dark text-white font-monospace mb-0" style={{ fontSize: '11px', overflowX: 'auto' }}>
+{`// JavaScript Fetch Example
+const query = new URLSearchParams({
+  'Your name': nameInput.value,
+  'Phone number': phoneInput.value,
+  'Email address': emailInput.value,
+  'What can we help with?': topicSelect.value,
+  'Your message': messageInput.value
 });
 
-fetch('https://your-domain.vercel.app/inquiry?' + inquiryData.toString())
-  .then(res => res.json())
-  .then(data => {
-    console.log('Inquiry saved!', data.ticket_number);
-    alert('Thank you! Your inquiry has been received.');
-  })
-  .catch(err => console.error(err));`}
+fetch('/inquiry?' + query.toString());`}
                     </pre>
                   </>
                 ) : (
                   <>
-                    <h6 className="fw-bold text-dark">
-                      2. Enrollments Endpoint: <code>/enroll</code> (or <code>/enool</code>)
-                    </h6>
                     <p className="text-secondary small mb-2">
-                      Send registrations from your daycare enrollment form:
+                      Send your enrollment form to <code>/enroll</code> (or <code>/enool</code>):
                     </p>
-                    <div className="bg-light p-2 rounded mb-3 small font-monospace">
-                      parent_name • phone • email • child_name • child_age • preferred_program • preferred_start_date • message
-                    </div>
-
-                    <h6 className="fw-semibold small text-muted">HTML / JavaScript Snippet for your website:</h6>
-                    <pre className="bg-dark text-light p-3 rounded" style={{ fontSize: '12px', maxHeight: '250px', overflowY: 'auto' }}>
-{`// Example: Sending from your website enrollment form to /enroll (or /enool)
-const enrollmentData = new URLSearchParams({
-  parent_name: document.getElementById('parent_name').value,
-  phone: document.getElementById('phone').value,
-  email: document.getElementById('email').value,
-  child_name: document.getElementById('child_name').value,
-  child_age: document.getElementById('child_age').value,
-  preferred_program: document.getElementById('preferred_program').value,
-  preferred_start_date: document.getElementById('start_date').value,
-  message: document.getElementById('special_notes').value
+                    <pre className="p-2.5 rounded bg-dark text-white font-monospace mb-0" style={{ fontSize: '11px', overflowX: 'auto' }}>
+{`// JavaScript Fetch Example
+const query = new URLSearchParams({
+  parent_name: parentInput.value,
+  phone: phoneInput.value,
+  email: emailInput.value,
+  child_name: childInput.value,
+  child_age: ageInput.value,
+  preferred_program: programSelect.value,
+  preferred_start_date: dateInput.value,
+  message: notesInput.value
 });
 
-// Both /enroll and /enool are supported:
-fetch('https://your-domain.vercel.app/enroll?' + enrollmentData.toString())
-  .then(res => res.json())
-  .then(data => {
-    console.log('Enrollment registered!', data.enrollment_number);
-    alert('Thank you! Your child is registered.');
-  })
-  .catch(err => console.error(err));`}
+fetch('/enroll?' + query.toString());`}
                     </pre>
                   </>
                 )}
               </div>
 
-              <div className="modal-footer bg-light">
-                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowScriptModal(false)}>
+              <div className="modal-footer border-top py-2 px-3">
+                <button type="button" className="btn btn-sm btn-secondary" onClick={() => setShowScriptModal(false)}>
                   Close
                 </button>
               </div>
@@ -2383,58 +1891,29 @@ fetch('https://your-domain.vercel.app/enroll?' + enrollmentData.toString())
         </div>
       )}
 
-      {/* NON-BLOCKING CUSTOM CONFIRMATION MODAL */}
+      {/* CONFIRMATION DIALOG */}
       {confirmDialog.isOpen && (
         <div 
           className="modal fade show d-block" 
           tabIndex={-1} 
-          style={{ backgroundColor: 'rgba(15, 23, 42, 0.6)', zIndex: 1060, backdropFilter: 'blur(2px)' }}
+          style={{ backgroundColor: 'rgba(15, 23, 42, 0.4)', zIndex: 1060 }}
           onClick={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
         >
-          <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: '420px' }} onClick={(e) => e.stopPropagation()}>
-            <div className="modal-content border-0 shadow-lg" style={{ borderRadius: '16px', overflow: 'hidden' }}>
-              <div className="modal-header border-0 pb-0 pt-4 px-4">
-                <div className="d-flex align-items-center gap-2.5">
-                  <div 
-                    className="d-flex align-items-center justify-content-center rounded-circle"
-                    style={{
-                      width: '40px',
-                      height: '40px',
-                      backgroundColor: confirmDialog.confirmVariant === 'danger' ? '#fee2e2' : '#e0e7ff',
-                      color: confirmDialog.confirmVariant === 'danger' ? '#dc2626' : '#4338ca',
-                      flexShrink: 0
-                    }}
-                  >
-                    <i className={`fas ${confirmDialog.confirmVariant === 'danger' ? 'fa-exclamation-triangle' : 'fa-info-circle'} fs-5`}></i>
-                  </div>
-                  <div>
-                    <h5 className="modal-title fw-bold fs-6 mb-0 text-dark">
-                      {confirmDialog.title}
-                    </h5>
-                  </div>
-                </div>
+          <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: '380px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-content border-0 shadow-lg p-3" style={{ borderRadius: '12px' }}>
+              <h6 className="fw-bold text-dark mb-1">{confirmDialog.title}</h6>
+              <p className="text-secondary small mb-3">{confirmDialog.message}</p>
+              <div className="d-flex justify-content-end gap-1.5">
                 <button 
                   type="button" 
-                  className="btn-close" 
-                  onClick={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
-                ></button>
-              </div>
-              <div className="modal-body px-4 py-3">
-                <p className="text-secondary small mb-0" style={{ lineHeight: 1.6, fontSize: '13.5px' }}>
-                  {confirmDialog.message}
-                </p>
-              </div>
-              <div className="modal-footer border-0 px-4 pb-4 pt-1 d-flex justify-content-end gap-2 bg-light-subtle">
-                <button 
-                  type="button" 
-                  className="btn btn-outline-secondary btn-sm px-3"
+                  className="btn btn-sm btn-light border px-2.5 py-1"
                   onClick={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
                 >
                   Cancel
                 </button>
                 <button 
                   type="button" 
-                  className={`btn btn-${confirmDialog.confirmVariant || 'danger'} btn-sm px-3 fw-medium shadow-xs`}
+                  className={`btn btn-sm btn-${confirmDialog.confirmVariant || 'danger'} px-2.5 py-1`}
                   onClick={confirmDialog.onConfirm}
                 >
                   {confirmDialog.confirmLabel || 'Confirm'}
