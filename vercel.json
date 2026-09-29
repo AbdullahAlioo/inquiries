@@ -1,0 +1,9 @@
+{
+  "framework": "vite",
+  "rewrites": [
+    { "source": "/inquiry(.*)", "destination": "/api/index" },
+    { "source": "/api/(.*)", "destination": "/api/index" },
+    { "source": "/export_excel", "destination": "/api/index" },
+    { "source": "/export-excel", "destination": "/api/index" }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "name": "InquiryHub - Admin & Lead Collection System",
+  "description": "Centralized admin dashboard to receive, track, and manage user inquiries from websites, forms, and client scripts in real time.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
