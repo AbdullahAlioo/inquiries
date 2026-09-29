@@ -96,6 +96,9 @@ function loadInquiries(): Inquiry[] {
 
 function saveInquiries(inquiries: Inquiry[]) {
   try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
     fs.writeFileSync(DATA_FILE, JSON.stringify(inquiries, null, 2), 'utf-8');
   } catch (err) {
     console.error('Error writing inquiries.json:', err);
@@ -117,6 +120,9 @@ function loadWaitingList(): WaitingEntry[] {
 
 function saveWaitingList(list: WaitingEntry[]) {
   try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
     fs.writeFileSync(WAITING_FILE, JSON.stringify(list, null, 2), 'utf-8');
   } catch (err) {
     console.error('Error writing waiting_list.json:', err);
@@ -464,42 +470,62 @@ app.patch('/api/inquiries/:id', (req: Request, res: Response) => {
   res.json({ success: true, inquiry: current });
 });
 
-// DELETE inquiry
-app.delete('/api/inquiries/:id', (req: Request, res: Response) => {
-  const { id } = req.params;
-  const index = inquiriesCache.findIndex(i => i.id === id || i.ticket_number === id);
+// DELETE inquiry (Robust handler supporting ID, Ticket Number, case-insensitivity)
+function handleInquiryDelete(req: Request, res: Response) {
+  const rawId = req.params.id || req.params.ticket_number;
+  if (!rawId) {
+    return res.status(400).json({ success: false, error: 'No ID provided' });
+  }
+
+  const searchTarget = decodeURIComponent(String(rawId)).trim().toLowerCase();
+
+  const index = inquiriesCache.findIndex(i => {
+    const idMatch = (i.id || '').toLowerCase() === searchTarget;
+    const ticketMatch = (i.ticket_number || '').toLowerCase() === searchTarget;
+    return idMatch || ticketMatch;
+  });
+
   if (index === -1) {
-    return res.status(404).json({ success: false, error: 'Enquiry not found' });
+    // Already deleted or not found; return success so client state reconciles cleanly
+    return res.json({ success: true, message: 'Enquiry already removed or not found', id: rawId });
   }
 
   const [deleted] = inquiriesCache.splice(index, 1);
   saveInquiries(inquiriesCache);
   broadcastSse('inquiry_deleted', { id: deleted.id, ticket_number: deleted.ticket_number });
 
-  res.json({ success: true, message: 'Enquiry deleted', id: deleted.id });
+  return res.json({
+    success: true,
+    message: 'Enquiry deleted successfully',
+    id: deleted.id,
+    ticket_number: deleted.ticket_number
+  });
+}
+
+app.delete('/api/inquiries/:id', handleInquiryDelete);
+app.post('/api/inquiries/:id/delete', handleInquiryDelete);
+app.delete('/api/inquiry/:id', handleInquiryDelete);
+app.post('/delete_ticket/:ticket_number', (req: Request, res: Response) => {
+  handleInquiryDelete(req, res);
+});
+app.get('/delete_ticket/:ticket_number', (req: Request, res: Response) => {
+  handleInquiryDelete(req, res);
 });
 
-// CLEAR ALL (Reset all to 0)
-app.post('/api/clear-all', (_req: Request, res: Response) => {
+// CLEAR ALL (Reset all to 0) - Aliases for maximum compatibility
+function handleClearAll(_req: Request, res: Response) {
   inquiriesCache = [];
   waitingListCache = [];
   saveInquiries([]);
   saveWaitingList([]);
   broadcastSse('inquiries_cleared', {});
-  res.json({ success: true, message: 'All inquiries and waiting list cleared to 0' });
-});
+  return res.json({ success: true, message: 'All inquiries and waiting list cleared to 0' });
+}
 
-// POST form delete ticket
-app.post('/delete_ticket/:ticket_number', (req: Request, res: Response) => {
-  const { ticket_number } = req.params;
-  const index = inquiriesCache.findIndex(i => i.ticket_number === ticket_number || i.id === ticket_number);
-  if (index !== -1) {
-    const [deleted] = inquiriesCache.splice(index, 1);
-    saveInquiries(inquiriesCache);
-    broadcastSse('inquiry_deleted', { id: deleted.id, ticket_number });
-  }
-  res.redirect('/');
-});
+app.post('/api/inquiries/clear_all', handleClearAll);
+app.post('/api/inquiries/clear-all', handleClearAll);
+app.post('/api/clear-all', handleClearAll);
+app.delete('/api/inquiries', handleClearAll);
 
 // WAITING LIST API
 app.get('/api/waiting', (_req: Request, res: Response) => {

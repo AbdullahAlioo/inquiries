@@ -29,6 +29,21 @@ export default function App() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string>('');
   
+  // Custom non-blocking confirmation dialog (replaces browser confirm/prompt which fail in iframes & mobile)
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    confirmVariant?: 'danger' | 'warning' | 'primary';
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
+
   // Modals
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [showTestModal, setShowTestModal] = useState(false);
@@ -50,6 +65,16 @@ export default function App() {
   const [testMessage, setTestMessage] = useState('Looking for enrolment starting November. We would love to book a morning tour to visit the facility.');
   const [testSending, setTestSending] = useState(false);
 
+  // Auto-dismiss flash notifications after 4.5 seconds
+  useEffect(() => {
+    if (flashMessage) {
+      const timer = setTimeout(() => {
+        setFlashMessage(null);
+      }, 4500);
+      return () => clearTimeout(timer);
+    }
+  }, [flashMessage]);
+
   // Update clock
   useEffect(() => {
     const updateTime = () => {
@@ -67,10 +92,12 @@ export default function App() {
       const res = await fetch('/api/inquiries');
       if (res.ok) {
         const data = await res.json();
-        setTickets(data.tickets || []);
-        setTotalTickets(data.total_tickets || 0);
-        setWaitingList(data.waiting_list || []);
-        setTotalWaiting(data.total_waiting || 0);
+        const incomingTickets: Ticket[] = data.tickets || [];
+        setTickets(incomingTickets);
+        setTotalTickets(incomingTickets.length);
+        const incomingWaiting: WaitingEntry[] = data.waiting_list || [];
+        setWaitingList(incomingWaiting);
+        setTotalWaiting(incomingWaiting.length);
         setLastUpdated(new Date().toISOString().slice(0, 19).replace('T', ' '));
       }
     } catch (err) {
@@ -91,11 +118,16 @@ export default function App() {
       eventSource.addEventListener('inquiry_created', (event) => {
         try {
           const newInquiry: Ticket = JSON.parse(event.data);
-          setTickets(prev => [newInquiry, ...prev.filter(t => t.id !== newInquiry.id)]);
-          setTotalTickets(prev => prev + 1);
+          setTickets(prev => {
+            const exists = prev.some(t => t.id === newInquiry.id || (newInquiry.ticket_number && t.ticket_number === newInquiry.ticket_number));
+            if (exists) return prev;
+            const updated = [newInquiry, ...prev];
+            setTotalTickets(updated.length);
+            return updated;
+          });
           setFlashMessage({
             type: 'info',
-            text: `New enquiry: ${newInquiry.parent_name || newInquiry.name} • Child: ${newInquiry.child_name || 'N/A'} (${newInquiry.preferred_program || 'General'})`
+            text: `New enquiry: ${newInquiry.parent_name || newInquiry.name} • Child: ${newInquiry.child_name || 'N/A'}`
           });
         } catch (e) {
           console.error(e);
@@ -106,7 +138,7 @@ export default function App() {
         try {
           const updated: Ticket = JSON.parse(event.data);
           setTickets(prev => prev.map(t => (t.id === updated.id || t.ticket_number === updated.ticket_number ? updated : t)));
-          setSelectedTicket(prev => (prev?.id === updated.id ? updated : prev));
+          setSelectedTicket(prev => (prev?.id === updated.id || prev?.ticket_number === updated.ticket_number ? updated : prev));
         } catch (e) {
           console.error(e);
         }
@@ -115,8 +147,15 @@ export default function App() {
       eventSource.addEventListener('inquiry_deleted', (event) => {
         try {
           const { id, ticket_number } = JSON.parse(event.data);
-          setTickets(prev => prev.filter(t => t.id !== id && t.ticket_number !== ticket_number));
-          setTotalTickets(prev => Math.max(0, prev - 1));
+          const target = (id || ticket_number || '').toLowerCase();
+          setTickets(prev => {
+            const updated = prev.filter(t => 
+              (t.id || '').toLowerCase() !== target && 
+              (t.ticket_number || '').toLowerCase() !== target
+            );
+            setTotalTickets(updated.length);
+            return updated;
+          });
         } catch (e) {
           console.error(e);
         }
@@ -170,7 +209,7 @@ export default function App() {
     }
 
     try {
-      const res = await fetch(`/api/inquiries/${id}`, {
+      const res = await fetch(`/api/inquiries/${encodeURIComponent(id)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dealt: newDealtStatus })
@@ -189,39 +228,86 @@ export default function App() {
     }
   };
 
-  // Delete enquiry
-  const handleDeleteTicket = async (id: string, name: string) => {
-    if (!window.confirm(`Are you sure you want to delete enquiry for "${name}"?`)) return;
+  // Delete enquiry - Opens beautiful custom confirmation modal
+  const requestDeleteTicket = (ticket: Ticket) => {
+    const parentName = ticket.parent_name || ticket.name || 'Parent';
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Delete Parent Enquiry',
+      message: `Are you sure you want to permanently delete the enquiry for "${parentName}" (${ticket.ticket_number || ticket.id})? This action cannot be undone.`,
+      confirmLabel: 'Yes, Delete',
+      confirmVariant: 'danger',
+      onConfirm: () => executeDeleteTicket(ticket.id, ticket.ticket_number || ticket.id, parentName)
+    });
+  };
+
+  const executeDeleteTicket = async (id: string, ticketNumber: string, name: string) => {
+    setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+
+    // Instant optimistic update
+    setTickets(prev => {
+      const next = prev.filter(t => 
+        t.id !== id && 
+        t.ticket_number !== ticketNumber && 
+        t.id !== ticketNumber && 
+        t.ticket_number !== id
+      );
+      setTotalTickets(next.length);
+      return next;
+    });
+
+    if (selectedTicket && (selectedTicket.id === id || selectedTicket.ticket_number === ticketNumber || selectedTicket.id === ticketNumber)) {
+      setSelectedTicket(null);
+    }
+
+    setFlashMessage({
+      type: 'success',
+      text: `Enquiry for ${name} deleted successfully.`
+    });
 
     try {
-      const res = await fetch(`/api/inquiries/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        setTickets(prev => prev.filter(t => t.id !== id));
-        setTotalTickets(prev => Math.max(0, prev - 1));
-        if (selectedTicket?.id === id) setSelectedTicket(null);
-        setFlashMessage({
-          type: 'success',
-          text: `Enquiry for ${name} deleted successfully.`
-        });
+      const target = encodeURIComponent(id || ticketNumber);
+      const res = await fetch(`/api/inquiries/${target}`, { method: 'DELETE' });
+      if (!res.ok) {
+        // Fallback to POST /delete
+        await fetch(`/api/inquiries/${target}/delete`, { method: 'POST' });
       }
     } catch (err) {
-      console.error(err);
+      console.error('Failed to delete on server:', err);
     }
   };
 
-  // Delete waiting entry
-  const handleDeleteWaiting = async (id: string, email: string) => {
-    if (!window.confirm(`Remove ${email} from waiting list?`)) return;
+  // Delete waiting entry - Opens confirmation dialog
+  const requestDeleteWaiting = (entry: WaitingEntry) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Remove from Waiting List',
+      message: `Are you sure you want to remove "${entry.email}" from the daycare waiting list?`,
+      confirmLabel: 'Yes, Remove',
+      confirmVariant: 'danger',
+      onConfirm: () => executeDeleteWaiting(entry.id, entry.email)
+    });
+  };
+
+  const executeDeleteWaiting = async (id: string, email: string) => {
+    setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+
+    setWaitingList(prev => {
+      const next = prev.filter(w => w.id !== id);
+      setTotalWaiting(next.length);
+      return next;
+    });
+
+    setFlashMessage({
+      type: 'success',
+      text: `Removed ${email} from waiting list.`
+    });
 
     try {
-      const res = await fetch(`/api/waiting/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        setWaitingList(prev => prev.filter(w => w.id !== id));
-        setTotalWaiting(prev => Math.max(0, prev - 1));
-        setFlashMessage({
-          type: 'success',
-          text: `Removed ${email} from waiting list.`
-        });
+      const target = encodeURIComponent(id);
+      const res = await fetch(`/api/waiting/${target}`, { method: 'DELETE' });
+      if (!res.ok) {
+        await fetch(`/delete_waiting_entry/${target}`, { method: 'POST' });
       }
     } catch (err) {
       console.error(err);
@@ -290,23 +376,25 @@ export default function App() {
       }
     } catch (err) {
       console.error(err);
-      alert('Failed to send test inquiry.');
+      setFlashMessage({
+        type: 'danger',
+        text: 'Failed to send test inquiry. Please check your network connection.'
+      });
     } finally {
       setTestSending(false);
     }
   };
 
-  // Clear all data to 0
-  const handleClearAll = async () => {
-    const confirmation = window.prompt('Type "RESET" to confirm clearing all parent enquiries and waiting list to 0:');
-    if (confirmation !== 'RESET') {
-      if (confirmation !== null) alert('Action cancelled: input did not match "RESET".');
-      return;
-    }
-
-    try {
-      const res = await fetch('/api/inquiries/clear_all', { method: 'POST' });
-      if (res.ok) {
+  // Clear all data to 0 - Custom modal dialog confirmation
+  const requestClearAll = () => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Reset All Records to 0',
+      message: 'Are you sure you want to permanently clear all parent enquiries and waiting list records? All counters will reset to 0.',
+      confirmLabel: 'Yes, Reset Everything to 0',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
         setTickets([]);
         setTotalTickets(0);
         setWaitingList([]);
@@ -316,10 +404,14 @@ export default function App() {
           type: 'success',
           text: 'All records have been reset to 0.'
         });
+
+        try {
+          await fetch('/api/inquiries/clear_all', { method: 'POST' });
+        } catch (err) {
+          console.error(err);
+        }
       }
-    } catch (err) {
-      console.error(err);
-    }
+    });
   };
 
   // Filtered tickets
@@ -539,7 +631,7 @@ export default function App() {
                 {tickets.length > 0 && (
                   <button 
                     className="btn btn-outline-danger btn-sm" 
-                    onClick={handleClearAll}
+                    onClick={requestClearAll}
                     title="Reset all records to 0"
                   >
                     <i className="fas fa-trash-alt me-1"></i>
@@ -932,7 +1024,7 @@ export default function App() {
                                         <button
                                           type="button"
                                           className="btn btn-outline-danger"
-                                          onClick={() => handleDeleteTicket(ticket.id, parentName)}
+                                          onClick={() => requestDeleteTicket(ticket)}
                                           title="Delete this enquiry"
                                         >
                                           <i className="fas fa-trash"></i>
@@ -1003,7 +1095,7 @@ export default function App() {
                                       <button
                                         type="button"
                                         className="btn btn-sm btn-outline-danger border-0 p-1"
-                                        onClick={() => handleDeleteTicket(ticket.id, parentName)}
+                                        onClick={() => requestDeleteTicket(ticket)}
                                         title="Delete enquiry"
                                       >
                                         <i className="fas fa-trash-alt"></i>
@@ -1196,7 +1288,7 @@ export default function App() {
                               <button
                                 type="button"
                                 className="btn btn-outline-danger btn-sm"
-                                onClick={() => handleDeleteWaiting(entry.id, entry.email)}
+                                onClick={() => requestDeleteWaiting(entry)}
                                 title="Remove from waiting list"
                               >
                                 <i className="fas fa-trash"></i>
@@ -1407,6 +1499,14 @@ export default function App() {
                   <i className="fas fa-reply me-1"></i>
                   Reply via Email & Mark Dealt
                 </a>
+                <button
+                  type="button"
+                  className="btn btn-outline-danger btn-sm"
+                  onClick={() => requestDeleteTicket(selectedTicket)}
+                >
+                  <i className="fas fa-trash me-1"></i>
+                  Delete Enquiry
+                </button>
                 <button type="button" className="btn btn-secondary btn-sm" onClick={() => setSelectedTicket(null)}>
                   Close
                 </button>
@@ -1685,6 +1785,68 @@ fetch(inquiryServer + params.toString())
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Non-Blocking Custom Confirmation Modal (Never blocked by browsers or iframes) */}
+      {confirmDialog.isOpen && (
+        <div 
+          className="modal fade show d-block" 
+          tabIndex={-1} 
+          style={{ backgroundColor: 'rgba(15, 23, 42, 0.6)', zIndex: 1060, backdropFilter: 'blur(2px)' }}
+          onClick={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+        >
+          <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: '420px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-content border-0 shadow-lg" style={{ borderRadius: '16px', overflow: 'hidden' }}>
+              <div className="modal-header border-0 pb-0 pt-4 px-4">
+                <div className="d-flex align-items-center gap-2.5">
+                  <div 
+                    className="d-flex align-items-center justify-content-center rounded-circle"
+                    style={{
+                      width: '40px',
+                      height: '40px',
+                      backgroundColor: confirmDialog.confirmVariant === 'danger' ? '#fee2e2' : '#e0e7ff',
+                      color: confirmDialog.confirmVariant === 'danger' ? '#dc2626' : '#4338ca',
+                      flexShrink: 0
+                    }}
+                  >
+                    <i className={`fas ${confirmDialog.confirmVariant === 'danger' ? 'fa-exclamation-triangle' : 'fa-info-circle'} fs-5`}></i>
+                  </div>
+                  <div>
+                    <h5 className="modal-title fw-bold fs-6 mb-0 text-dark">
+                      {confirmDialog.title}
+                    </h5>
+                  </div>
+                </div>
+                <button 
+                  type="button" 
+                  className="btn-close" 
+                  onClick={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+                ></button>
+              </div>
+              <div className="modal-body px-4 py-3">
+                <p className="text-secondary small mb-0" style={{ lineHeight: 1.6, fontSize: '13.5px' }}>
+                  {confirmDialog.message}
+                </p>
+              </div>
+              <div className="modal-footer border-0 px-4 pb-4 pt-1 d-flex justify-content-end gap-2 bg-light-subtle">
+                <button 
+                  type="button" 
+                  className="btn btn-outline-secondary btn-sm px-3"
+                  onClick={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="button" 
+                  className={`btn btn-${confirmDialog.confirmVariant || 'danger'} btn-sm px-3 fw-medium shadow-xs`}
+                  onClick={confirmDialog.onConfirm}
+                >
+                  {confirmDialog.confirmLabel || 'Confirm'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
