@@ -1,9 +1,14 @@
 {
   "framework": "vite",
   "rewrites": [
+    { "source": "/enroll(.*)", "destination": "/api/index" },
+    { "source": "/enool(.*)", "destination": "/api/index" },
+    { "source": "/enrollment(.*)", "destination": "/api/index" },
+    { "source": "/enrollments(.*)", "destination": "/api/index" },
     { "source": "/inquiry(.*)", "destination": "/api/index" },
-    { "source": "/api/(.*)", "destination": "/api/index" },
-    { "source": "/export_excel", "destination": "/api/index" },
-    { "source": "/export-excel", "destination": "/api/index" }
+    { "source": "/inquiries(.*)", "destination": "/api/index" },
+    { "source": "/export_(.*)", "destination": "/api/index" },
+    { "source": "/export-(.*)", "destination": "/api/index" },
+    { "source": "/api/(.*)", "destination": "/api/index" }
   ]
 }

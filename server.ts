@@ -359,8 +359,11 @@ function extractEnrollmentPayload(sourceData: Record<string, any>) {
 
   const email = String(
     sourceData.email ||
+    sourceData.Email ||
     sourceData.email_address ||
     sourceData.emailAddress ||
+    sourceData['Email address'] ||
+    sourceData['email address'] ||
     ''
   ).trim();
 
@@ -417,10 +420,12 @@ function extractEnrollmentPayload(sourceData: Record<string, any>) {
     'enrollment-form'
   ).trim();
 
+  const effectiveEmail = email || (phone ? `${phone.replace(/\D/g, '') || 'parent'}@phone-contact.local` : 'parent-enquiry@daycare.local');
+
   return {
     parent_name,
     phone,
-    email,
+    email: effectiveEmail,
     child_name,
     child_age,
     preferred_program,
@@ -443,14 +448,6 @@ function handleEnrollmentIngestion(req: Request, res: Response) {
     message,
     source
   } = extractEnrollmentPayload(payloadSource);
-
-  if (!email) {
-    return res.status(400).json({
-      success: false,
-      error: 'Email required',
-      message: 'Please provide a valid parent email address.'
-    });
-  }
 
   const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
   const userAgent = (req.headers['user-agent'] as string) || 'unknown';
